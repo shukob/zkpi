@@ -1,0 +1,100 @@
+{
+  "calibration": {
+    "range_proof_40bit_ms": 9.57633299913141,
+    "scalar_mult_us": 35.50000110408291
+  },
+  "forgery_controls": [
+    {
+      "control": "winner swapped to a non-minimal maker",
+      "reason": "the published winner value is not what the commitment opens to",
+      "rejected": true
+    },
+    {
+      "control": "expired maker",
+      "reason": "value -1 outside [0, 2^24)",
+      "rejected": true
+    },
+    {
+      "control": "request over the size limit",
+      "reason": "value -99800 outside [0, 2^24)",
+      "rejected": true
+    },
+    {
+      "control": "minimality proofs swapped between makers",
+      "reason": "maker 0: not shown to be at least the winner",
+      "rejected": true
+    },
+    {
+      "control": "minimality for a false winner",
+      "reason": "value -1 outside [0, 2^25)",
+      "rejected": true
+    }
+  ],
+  "host": "host-c",
+  "joint": [
+    {
+      "assemble_ms": 1.0772085006465204,
+      "assemble_ms_without_attribution": 0.3311045002192259,
+      "attribution_factor": 3.2533792199541094,
+      "no_node_holds_witness": true,
+      "quorum": [
+        1,
+        2,
+        3
+      ],
+      "size": 3,
+      "verified_by_ordinary_verifier": true
+    },
+    {
+      "assemble_ms": 2.5799579998420086,
+      "assemble_ms_without_attribution": 0.829041498946026,
+      "attribution_factor": 3.1119769072138745,
+      "no_node_holds_witness": true,
+      "quorum": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "size": 7,
+      "verified_by_ordinary_verifier": true
+    }
+  ],
+  "nodes": 7,
+  "scaling": [
+    {
+      "makers": 4,
+      "matches_cleartext": true,
+      "message": "ok",
+      "prove_ms": 72.5644160011143,
+      "range_bits": 24,
+      "verified": true,
+      "verify_ms": 85.58283299862524,
+      "winner": 2
+    },
+    {
+      "makers": 8,
+      "matches_cleartext": true,
+      "message": "ok",
+      "prove_ms": 150.3150420030579,
+      "range_bits": 25,
+      "verified": true,
+      "verify_ms": 172.31837500003166,
+      "winner": 5
+    },
+    {
+      "makers": 16,
+      "matches_cleartext": true,
+      "message": "ok",
+      "prove_ms": 304.1910829997505,
+      "range_bits": 26,
+      "verified": true,
+      "verify_ms": 351.974874996813,
+      "winner": 5
+    }
+  ],
+  "threshold": 2
+}
