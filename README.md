@@ -67,9 +67,11 @@ flowchart TB
         ISS["issuer<br/>KYB credentials"]
         INS["instruction<br/>commit, bound, nullify"]
         QUO["quorum<br/>who signed it"]
+        HAN["handles<br/>one seed, an unrelated point per venue"]
     end
 
     DALEK --> PED
+    DALEK --> HAN
     BP --> RNG
     FROST --> QUO
     PED --> SIG
@@ -81,6 +83,7 @@ flowchart TB
     OOM --> ISS
     ORD --> ISS
     INS --> QUO
+    HAN --> INS
 ```
 
 Exported from a single research tree by `scripts/export_repos.py`, which is why

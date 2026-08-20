@@ -11,6 +11,8 @@
 //! Python version carried. FROST is a real threshold Schnorr scheme with an
 //! audit behind it; there was no reason to keep a hand-rolled one.
 
+pub mod handles;
+
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
