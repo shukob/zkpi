@@ -1,5 +1,7 @@
 # zkpi
 
+**zkPI** is a *zero-knowledge payment instruction*.
+
 Proof-carrying instructions: a venue's decision, provable without the inputs that produced it.
 
 ## What it does
