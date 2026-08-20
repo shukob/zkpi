@@ -1,0 +1,27 @@
+{
+  "artifacts": {
+    "quote_proof.json": {
+      "bytes": 2318,
+      "host": "host-c",
+      "sha256": "6b92293d1962cdd795b20f963cbae04676673977d29a43534a441d7df27ae770"
+    },
+    "state_audit.json": {
+      "bytes": 3305,
+      "host": "host-c",
+      "python": "3.13.5",
+      "sha256": "0add7cf1af6289c208068d23c18066ee6a577eeb2c9313da5b91a8ff420a6f4b"
+    },
+    "zk_bench.json": {
+      "bytes": 15357,
+      "host": "host-c",
+      "python": "3.13.5",
+      "sha256": "b1c7370a24d86129cf23a66aa6ac2edb585c99568977a966166de7beb40ec717"
+    },
+    "zk_compare.json": {
+      "bytes": 9687,
+      "host": "host-c",
+      "sha256": "d21e3a7aa980291e399d05d3e8f050d25878ead7d93f568144849ad92096deba"
+    }
+  },
+  "commit": "ac1fc710b3ddd9ee70e0b8641c735c421470c242"
+}

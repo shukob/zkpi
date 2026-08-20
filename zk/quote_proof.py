@@ -47,8 +47,20 @@ from .commit import (
 from .groups import Group
 
 
+FIELDS = ("mid", "half", "slope", "invcoef", "inv", "maxqty", "expiry", "active")
+
+
 @dataclass(frozen=True)
 class MakerWitness:
+    """A maker's policy and the blindings it registered it under.
+
+    The blindings are what makes this a witness for a *registered* policy
+    rather than for whatever the prover felt like committing. Without them the
+    prover drew fresh blindings for every field at proving time, so the quote
+    proof established a minimum over a set of commitments the prover had just
+    invented -- true about those, and about nothing on the record.
+    """
+
     mid: int
     half: int
     slope: int
@@ -57,6 +69,27 @@ class MakerWitness:
     maxqty: int
     expiry: int
     active: int
+    blindings: dict = field(default_factory=dict)
+
+    def registered(self, key: Pedersen) -> dict:
+        """The commitments this policy was registered under."""
+        return {name: key.commit(getattr(self, name), self.blindings[name])
+                for name in FIELDS}
+
+
+def registry_digest(group: Group, registered: Sequence[Mapping[str, Any]]) -> bytes:
+    """One digest over the whole eligible set, in order.
+
+    Fixing this in the public statement is what makes maker *omission* visible:
+    a prover that drops a maker to change the winner has to publish a different
+    digest, and the digest was agreed before the request arrived.
+    """
+    hasher = hashlib.sha256(b"QOMM:QUOTE:REGISTRY:v1")
+    hasher.update(len(registered).to_bytes(4, "big"))
+    for policy in registered:
+        for name in FIELDS:
+            hasher.update(group.encode(policy[name]))
+    return hasher.digest()
 
 
 @dataclass(frozen=True)
@@ -96,10 +129,19 @@ class QuoteProver:
 
     def prove(self, makers: Sequence[MakerWitness], *, qty: int, direction: int,
               now: int, sentinel: int, n_slots: int,
+              market_digest: bytes = b"", slot: int = 0,
               context: bytes = b"") -> tuple[QuoteProof, dict]:
         key = self.key
         group = self.group
         order = group.order
+
+        for index, maker in enumerate(makers):
+            missing = [name for name in FIELDS if name not in maker.blindings]
+            if missing:
+                raise ValueError(
+                    f"maker {index} has no registered blinding for {missing}: a "
+                    "quote proof is about policies that were put on the record, "
+                    "and a witness without them is a policy invented now")
 
         r_qty = self._blind()
         c_qty = key.commit(qty, r_qty)
@@ -111,7 +153,11 @@ class QuoteProver:
 
         for index, maker in enumerate(makers):
             tag = context + b":mm:" + index.to_bytes(2, "big")
-            r_slope, r_invcoef, r_inv = self._blind(), self._blind(), self._blind()
+            # Every field opens the commitment the maker registered. Drawing
+            # fresh blindings here is what made the proof true about a set the
+            # prover had just made up.
+            blind = maker.blindings
+            r_slope, r_invcoef, r_inv = (blind["slope"], blind["invcoef"], blind["inv"])
             c_slope = key.commit(maker.slope, r_slope)
             c_invcoef = key.commit(maker.invcoef, r_invcoef)
             c_inv = key.commit(maker.inv, r_inv)
@@ -125,14 +171,14 @@ class QuoteProver:
             skew_proof = prove_product(key, c_invcoef, maker.invcoef, r_invcoef,
                                        maker.inv, r_inv, r_skew, tag + b":skew")
 
-            r_mid, r_half = self._blind(), self._blind()
+            r_mid, r_half = blind["mid"], blind["half"]
             ask = maker.mid + maker.half + depth + skew
             bid = maker.mid - maker.half - depth + skew
             r_ask = (r_mid + r_half + r_depth + r_skew) % order
             r_bid = (r_mid - r_half - r_depth + r_skew) % order
 
             # eligibility, each piece proved rather than asserted
-            r_maxqty, r_expiry = self._blind(), self._blind()
+            r_maxqty, r_expiry = blind["maxqty"], blind["expiry"]
             c_fits = key.commit(maker.maxqty - qty, (r_maxqty - r_qty) % order)
             fits_proof = prove_range(key, c_fits, maker.maxqty - qty,
                                      (r_maxqty - r_qty) % order, self.sentinel_bits,
@@ -141,7 +187,7 @@ class QuoteProver:
             fresh_proof = prove_range(key, c_fresh, maker.expiry - now, r_expiry,
                                       self.sentinel_bits, tag + b":fresh")
 
-            r_active = self._blind()
+            r_active = blind["active"]
             c_active = key.commit(maker.active, r_active)
             active_proof = prove_bit(key, c_active, maker.active, r_active, tag + b":active")
 
@@ -172,6 +218,10 @@ class QuoteProver:
                 fits=fits_proof, fresh=fresh_proof,
                 active_bit=active_proof, ok_bit=ok_proof,
                 commitments={
+                    "mid": key.commit(maker.mid, r_mid),
+                    "half": key.commit(maker.half, r_half),
+                    "maxqty": key.commit(maker.maxqty, r_maxqty),
+                    "expiry": key.commit(maker.expiry, r_expiry),
                     "slope": c_slope, "invcoef": c_invcoef, "inv": c_inv,
                     "depth": key.commit(depth, r_depth), "skew": key.commit(skew, r_skew),
                     "fits": c_fits, "fresh": c_fresh, "active": c_active, "ok": c_ok,
@@ -203,8 +253,14 @@ class QuoteProver:
 
         proof = QuoteProof(winner, value, tuple(maker_proofs), winner_opening,
                            tuple(minimality), tuple(key_commitments), span_bits)
+        registered = [maker.registered(key) for maker in makers]
         public = {"qty_commitment": c_qty, "now": now, "sentinel": sentinel,
-                  "n_slots": n_slots, "direction": direction}
+                  "n_slots": n_slots, "direction": direction,
+                  # what the proof is *about*, as opposed to what it proves
+                  "registry": registered,
+                  "registry_digest": registry_digest(group, registered),
+                  "market_digest": market_digest,
+                  "slot": slot}
         return proof, public
 
 
@@ -221,9 +277,30 @@ class QuoteVerifier:
         group = self.group
         c_qty = public["qty_commitment"]
 
+        # What the statement has to say before any of it means anything: which
+        # policies, which set, and which request. Without these the proof
+        # established a minimum over commitments the prover chose, which is
+        # true and says nothing about the market that was registered.
+        registered = public.get("registry")
+        if registered is None:
+            return False, ("the statement names no registered policies, so this "
+                           "proof is about commitments the prover chose")
+        if len(registered) != len(proof.maker_proofs):
+            return False, (f"the statement registers {len(registered)} makers and "
+                           f"the proof covers {len(proof.maker_proofs)}")
+        expected = registry_digest(group, registered)
+        if public.get("registry_digest") != expected:
+            return False, "the registered set is not the one this statement names"
+
         for index, maker in enumerate(proof.maker_proofs):
             tag = context + b":mm:" + index.to_bytes(2, "big")
             c = maker.commitments
+            for name in FIELDS:
+                if name not in c:
+                    return False, f"maker {index}: the proof does not carry {name}"
+                if group.encode(c[name]) != group.encode(registered[index][name]):
+                    return False, (f"maker {index}: {name} is not the one on the "
+                                   "register")
             if not verify_product(key, c["slope"], c_qty, c["depth"], maker.depth,
                                   tag + b":depth"):
                 return False, f"maker {index}: depth is not slope * quantity"

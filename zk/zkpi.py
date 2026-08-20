@@ -9,7 +9,7 @@ learning what it moves.
 
 Deliberately pluggable. The venue side needs only:
 
-    verify(instruction, quorum_key, now)  -> (ok, reason)
+    SettlementVenue(group, quorum_key=...).verify(instruction, now=...) -> (ok, reason)
     nullifier(instruction)                -> bytes, spent at most once
 
 so a DEX that already has its own matching engine can accept zkPIs from this one,
@@ -21,6 +21,15 @@ asset and amount lie in the declared ranges, whose price matches the quote the
 computing nodes signed, whose deadline has not passed, and whose nullifier has
 not been seen. What it does not learn: the asset, the amount, the price, or which
 entity.
+
+**This is the reference prototype, not the security candidate.** The Rust port
+in `rust/qomm-zkpi` is the one to read for the current construction: it binds
+the quote key into the signed digest, verifies each committed field against its
+own range proof, and takes its quorum public key from a FROST deal rather than
+from the instruction. What is here came first and is kept because the
+measurements in the paper's Python column were taken against it. Two things it
+gets wrong and the port does not are recorded above the code that gets them
+wrong.
 """
 
 from __future__ import annotations
@@ -96,10 +105,27 @@ class InstructionIssuer:
     """Built by the winning parties from values only they can read."""
 
     def __init__(self, group: Group, key: Pedersen | None = None,
-                 bounds: InstructionBounds | None = None):
+                 bounds: InstructionBounds | None = None,
+                 quorum_secret: int | None = None,
+                 quorum_blinding: int | None = None):
         self.group = group
         self.key = key or Pedersen(group, b"qomm:zkpi:v1")
         self.bounds = bounds or InstructionBounds()
+        # The quorum this issuer signs with. Dealing a fresh one per instruction
+        # -- which is what happened when these are None -- means the "quorum"
+        # is whatever the issuer made up a moment ago, and a venue that reads
+        # the key out of the instruction cannot tell that from a real one. Fix
+        # them here and hand `quorum_key` to the venue, and the two are talking
+        # about the same set of nodes.
+        self.quorum_secret = quorum_secret
+        self.quorum_blinding = quorum_blinding
+
+    @property
+    def quorum_key(self):
+        """The public key a venue should be constructed to trust, or None."""
+        if self.quorum_secret is None or self.quorum_blinding is None:
+            return None
+        return self.key.commit(self.quorum_secret, self.quorum_blinding)
 
     def issue(self, *, asset: int, amount: int, price: int, payer_handle: Any,
               payee_handle: Any, deadline: int, nonce: bytes,
@@ -138,8 +164,11 @@ class InstructionIssuer:
         # instruction digest goes into the Fiat-Shamir transcript rather than
         # into the committed value: that is what binds the signature to *this*
         # instruction, so altering any field invalidates it.
-        secret = key.random_blinding()
-        shares = deal(key, secret, key.random_blinding(), list(nodes), threshold)
+        secret = (self.quorum_secret if self.quorum_secret is not None
+                  else key.random_blinding())
+        blinding = (self.quorum_blinding if self.quorum_blinding is not None
+                    else key.random_blinding())
+        shares = deal(key, secret, blinding, list(nodes), threshold)
         signature, transcript = joint_prove_opening(
             key, shares, list(quorum), _sign_context(instruction.digest(group)))
         signed = ZkPaymentInstruction(
@@ -152,10 +181,18 @@ class SettlementVenue:
     """The pluggable side. Any DEX can run exactly this and nothing else."""
 
     def __init__(self, group: Group, key: Pedersen | None = None,
-                 bounds: InstructionBounds | None = None):
+                 bounds: InstructionBounds | None = None,
+                 quorum_key: Any | None = None):
         self.group = group
         self.key = key or Pedersen(group, b"qomm:zkpi:v1")
         self.bounds = bounds or InstructionBounds()
+        # The quorum the venue trusts, fixed before any instruction arrives.
+        # Without it the venue checked the signature against a commitment
+        # carried *inside the instruction*, and the issuer generates that
+        # commitment itself -- so anyone could deal themselves a quorum and
+        # sign their own payment instruction with it. A venue built without one
+        # still runs, for the fixtures, and says what it is not checking.
+        self.quorum_key = quorum_key
         self._spent: set[bytes] = set()
 
     def verify(self, instruction: ZkPaymentInstruction, *, now: int
@@ -191,6 +228,13 @@ class SettlementVenue:
         signature, commitment = instruction.quorum_signature
         if not group.is_valid(commitment):
             return False, "quorum key is not a group element"
+        if self.quorum_key is None:
+            return False, ("this venue trusts no quorum, so it cannot tell an "
+                           "instruction signed by the computing nodes from one "
+                           "signed by whoever wrote it; construct it with "
+                           "quorum_key=")
+        if group.encode(commitment) != group.encode(self.quorum_key):
+            return False, "signed by a quorum this venue does not trust"
         # the digest is recomputed here, so a signature made for a different
         # instruction cannot be replayed onto this one
         if not verify_opening(key, commitment, signature,

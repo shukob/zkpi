@@ -151,3 +151,48 @@ fn an_amount_outside_the_published_bounds_cannot_be_issued() {
                1_500, [7u8; 32], 1, &mut rng)
         .is_err());
 }
+
+/// A deadline the venue will not hold a nullifier for is refused.
+///
+/// The bounded-state argument is that a nullifier only has to outlive its
+/// deadline, so state grows with instructions in flight rather than with
+/// history. That needs an upper bound on how far out a deadline may be, and
+/// only "not expired yet" was checked: an instruction dated a century out kept
+/// its nullifier for a century, and the argument did not hold.
+#[test]
+fn a_deadline_beyond_the_venues_horizon_is_refused() {
+    let mut rng = OsRng;
+    let q = quorum(&mut rng);
+    let bounds = Bounds::default();
+    let far = 1_000 + bounds.max_horizon + 1;
+    let (instruction, _) = issue(&mut rng, &q, 100, 99_990, far);
+    assert_eq!(venue(&q).verify(&instruction, 1_000),
+               Err("the deadline is further out than this venue will hold a \
+nullifier for"));
+}
+
+#[test]
+fn a_deadline_inside_the_horizon_is_accepted() {
+    let mut rng = OsRng;
+    let q = quorum(&mut rng);
+    let near = 1_000 + Bounds::default().max_horizon;
+    let (instruction, _) = issue(&mut rng, &q, 100, 99_990, near);
+    assert!(venue(&q).verify(&instruction, 1_000).is_ok());
+}
+
+/// Declaring a narrow amount and a wide price bought nothing: one aggregated
+/// range proof covers both fields at one width, so the amount was proved at
+/// the price's width. The venue refuses the pair rather than accepting the
+/// wider and calling it the narrower.
+#[test]
+fn a_venue_will_not_pretend_one_range_proof_shows_two_widths() {
+    let mut rng = OsRng;
+    let q = quorum(&mut rng);
+    let bounds = Bounds { amount_bits: 24, price_bits: 64, ..Bounds::default() };
+    let (instruction, _) = issue(&mut rng, &q, 100, 99_990, 1_500);
+    let mut mixed = Venue::new(Pedersen::new(b"qomm:zkpi:v1"), &bounds,
+                               q.public.clone());
+    assert_eq!(mixed.verify(&instruction, 1_000),
+               Err("this venue declares different widths for amount and price, \
+and one aggregated range proof cannot show two widths"));
+}

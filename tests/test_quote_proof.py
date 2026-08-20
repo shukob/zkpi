@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from zk.commit import Pedersen, prove_product, verify_opening, verify_product  # noqa: E402
 from zk.groups import make_group                                               # noqa: E402
 from zk.quote_proof import MakerWitness, QuoteProof, QuoteProver, QuoteVerifier  # noqa: E402
+from zk.quote_proof import FIELDS, registry_digest  # noqa: E402
 from zk.threshold_sigma import deal, joint_prove_opening, lagrange_at_zero      # noqa: E402
 
 SENTINEL = 1 << 20
@@ -23,9 +24,18 @@ def group():
     return make_group("ed25519")
 
 
-def _makers(n: int = 6):
-    return [MakerWitness(mid=100_000 + 3 * i, half=10 + i, slope=i % 3, invcoef=i % 2,
-                         inv=10 * i, maxqty=400, expiry=1_600, active=1)
+def _register(group, values: dict) -> MakerWitness:
+    """A policy as it goes on the record: values and the blindings that hide them."""
+    key = Pedersen(group, b"qomm:quote:v1")
+    return MakerWitness(**values,
+                        blindings={name: key.random_blinding() for name in FIELDS})
+
+
+def _makers(n: int = 6, group=None):
+    group = group or make_group("ed25519")
+    return [_register(group, dict(mid=100_000 + 3 * i, half=10 + i, slope=i % 3,
+                                  invcoef=i % 2, inv=10 * i, maxqty=400,
+                                  expiry=1_600, active=1))
             for i in range(n)]
 
 
@@ -159,8 +169,9 @@ def test_the_published_price_is_bound_by_the_proof():
     still verified. The residual C/g^value is what closes it."""
     group = make_group("ed25519")
     prover, verifier = QuoteProver(group), QuoteVerifier(group)
-    makers = [MakerWitness(mid=0, half=h, slope=1, invcoef=1, inv=10,
-                           maxqty=1_000, expiry=10_000, active=1) for h in (8, 5, 12)]
+    makers = [_register(group, dict(mid=0, half=h, slope=1, invcoef=1, inv=10,
+                                    maxqty=1_000, expiry=10_000, active=1))
+              for h in (8, 5, 12)]
     proof, public = prover.prove(makers, qty=100, direction=0, now=1_000,
                                  sentinel=1 << 20, n_slots=4)
     assert verifier.verify(proof, public)[0]
@@ -172,3 +183,64 @@ def test_the_published_price_is_bound_by_the_proof():
         ok, reason = verifier.verify(lied, public)
         assert not ok, f"a price off by {delta} was accepted"
         assert "winner value" in reason
+
+
+# --- the proof has to be about the policies that were registered ------------
+#
+# The statement used to carry the quantity commitment, the clock, a sentinel, a
+# slot count and a direction. Every commitment the minimum was taken over was
+# drawn by the prover at proving time, so the proof said "among these numbers I
+# just committed to, this is the smallest" -- true, and silent about whether
+# those numbers were the market's.
+
+def test_a_statement_with_no_registry_is_refused(group):
+    proof, public = _prove(group)
+    stripped = {k: v for k, v in public.items() if k != "registry"}
+    ok, why = QuoteVerifier(group).verify(proof, stripped)
+    assert not ok and "no registered policies" in why
+
+
+def test_a_policy_the_register_does_not_hold_is_refused(group):
+    """The forgery: quote from a policy that was never registered."""
+    makers = _makers(group=group)
+    proof, public = _prove(group, makers)
+    key = Pedersen(group, b"qomm:quote:v1")
+    swapped = [dict(policy) for policy in public["registry"]]
+    swapped[0]["half"] = key.commit(1, key.random_blinding())
+    moved = dict(public, registry=swapped,
+                 registry_digest=registry_digest(group, swapped))
+    ok, why = QuoteVerifier(group).verify(proof, moved)
+    assert not ok and "not the one on the register" in why
+
+
+def test_a_registry_digest_that_does_not_cover_the_registry_is_refused(group):
+    proof, public = _prove(group)
+    ok, why = QuoteVerifier(group).verify(proof, dict(public, registry_digest=b"\x00" * 32))
+    assert not ok and "not the one this statement names" in why
+
+
+def test_dropping_a_maker_from_the_set_is_visible(group):
+    """Omission changes the digest, and the digest was fixed before the request."""
+    makers = _makers(group=group)
+    proof, public = _prove(group, makers)
+    fewer = public["registry"][:-1]
+    ok, why = QuoteVerifier(group).verify(
+        proof, dict(public, registry=fewer,
+                    registry_digest=registry_digest(group, fewer)))
+    assert not ok and "registers" in why
+
+
+def test_a_witness_without_registered_blindings_cannot_prove(group):
+    """A policy invented at proving time is not a registered one."""
+    bare = [MakerWitness(mid=0, half=5, slope=1, invcoef=1, inv=10,
+                         maxqty=1_000, expiry=10_000, active=1)]
+    with pytest.raises(ValueError, match="put on the record"):
+        QuoteProver(group).prove(bare, qty=10, direction=0, now=1_000,
+                                 sentinel=1 << 20, n_slots=2)
+
+
+def test_the_registry_digest_is_a_function_of_the_whole_set_and_its_order(group):
+    a = [m.registered(Pedersen(group, b"qomm:quote:v1")) for m in _makers(3, group)]
+    assert registry_digest(group, a) == registry_digest(group, a)
+    assert registry_digest(group, a) != registry_digest(group, list(reversed(a)))
+    assert registry_digest(group, a) != registry_digest(group, a[:-1])

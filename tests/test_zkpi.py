@@ -31,7 +31,13 @@ def group():
 @pytest.fixture()
 def parts(group):
     key = Pedersen(group, b"qomm:zkpi:v1")
-    return key, InstructionIssuer(group, key), SettlementVenue(group, key)
+    # One quorum, dealt once and trusted by the venue. An issuer that deals a
+    # fresh one per instruction is an issuer that can sign for itself, and the
+    # venue below is constructed to notice.
+    secret, blinding = key.random_blinding(), key.random_blinding()
+    issuer = InstructionIssuer(group, key, quorum_secret=secret,
+                               quorum_blinding=blinding)
+    return key, issuer, SettlementVenue(group, key, quorum_key=issuer.quorum_key)
 
 
 def _issue(issuer, group, **overrides):
@@ -142,13 +148,50 @@ def test_the_same_leg_twice_looks_different(group, parts):
 
 
 def test_a_venue_needs_only_verify_and_the_nullifier(group, parts):
-    """The pluggable interface: no knowledge of how the price was reached."""
+    """The pluggable interface: no knowledge of how the price was reached.
+
+    It does need to know *whose* quorum it is settling for, though, which is
+    the one thing a venue cannot learn from the instruction in front of it.
+    """
     _, issuer, _ = parts
     other_venue = SettlementVenue(group, Pedersen(group, b"qomm:zkpi:v1"),
-                                  InstructionBounds())
+                                  InstructionBounds(),
+                                  quorum_key=issuer.quorum_key)
     instruction, _ = _issue(issuer, group)
     assert other_venue.verify(instruction, now=1_000)[0]
     assert isinstance(instruction.nullifier(group), bytes)
+
+
+def test_a_venue_that_trusts_no_quorum_settles_nothing(group, parts):
+    _, issuer, _ = parts
+    blind = SettlementVenue(group, Pedersen(group, b"qomm:zkpi:v1"), InstructionBounds())
+    instruction, _ = _issue(issuer, group)
+    ok, reason = blind.verify(instruction, now=1_000)
+    assert not ok and "trusts no quorum" in reason
+
+
+def test_an_issuer_cannot_deal_itself_a_quorum(group, parts):
+    """The forgery the venue used to accept: a quorum invented on the spot.
+
+    Nothing here is malformed. The signature is a real joint opening over a
+    real deal; it is simply a deal the issuer made for itself, and the venue
+    used to read the key out of the instruction and check against that.
+    """
+    key, issuer, venue = parts
+    impostor = InstructionIssuer(group, key,
+                                 quorum_secret=key.random_blinding(),
+                                 quorum_blinding=key.random_blinding())
+    instruction, _ = _issue(impostor, group)
+    ok, reason = venue.verify(instruction, now=1_000)
+    assert not ok and "does not trust" in reason
+
+
+def test_an_issuer_that_deals_a_fresh_quorum_each_time_is_not_trusted(group, parts):
+    key, _, venue = parts
+    ad_hoc = InstructionIssuer(group, key)          # no fixed quorum: the old behaviour
+    instruction, _ = _issue(ad_hoc, group)
+    ok, reason = venue.verify(instruction, now=1_000)
+    assert not ok and "does not trust" in reason
 
 
 def test_a_venue_with_tighter_bounds_refuses(group, parts):

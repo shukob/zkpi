@@ -29,10 +29,20 @@ pub use frost_ristretto255 as frost;
 pub struct Bounds {
     pub amount_bits: usize,
     pub price_bits: usize,
+    /// How far ahead a venue will accept a deadline, from the moment it checks.
+    ///
+    /// The nullifier set is bounded by instructions in flight in one deadline
+    /// window, which is the argument that state grows with activity and not
+    /// with history. That argument needs an upper bound on the window and there
+    /// was none: only "not expired" was checked, so an instruction dated a
+    /// century out kept its nullifier for a century.
+    pub max_horizon: u64,
 }
 
 impl Default for Bounds {
-    fn default() -> Self { Bounds { amount_bits: 32, price_bits: 32 } }
+    fn default() -> Self {
+        Bounds { amount_bits: 32, price_bits: 32, max_horizon: 86_400 }
+    }
 }
 
 /// What the quorum issues. Nothing here reveals the trade.
@@ -181,16 +191,30 @@ pub struct Venue {
     pub ranges: RangeCtx,
     pub group_public: frost::keys::PublicKeyPackage,
     spent: HashSet<[u8; 32]>,
+    /// The two widths, kept apart. `RangeCtx` proves both fields at one width,
+    /// so declaring a 24-bit amount and a 64-bit price let the amount through
+    /// at 64 --- the narrower declaration bought nothing. Until the aggregated
+    /// proof is split in two, the venue refuses the pair rather than accepting
+    /// the wider of them and calling it the narrower.
+    amount_bits: usize,
+    price_bits: usize,
+    max_horizon: u64,
 }
 
 impl Venue {
     pub fn new(key: Pedersen, bounds: &Bounds,
                group_public: frost::keys::PublicKeyPackage) -> Self {
         let bits = bounds.amount_bits.max(bounds.price_bits);
-        Venue { key, ranges: RangeCtx::new(bits, 2), group_public, spent: HashSet::new() }
+        Venue { key, ranges: RangeCtx::new(bits, 2), group_public,
+                spent: HashSet::new(), max_horizon: bounds.max_horizon,
+                amount_bits: bounds.amount_bits, price_bits: bounds.price_bits }
     }
 
     pub fn verify(&self, instruction: &Instruction, now: u64) -> Result<(), &'static str> {
+        if instruction.deadline > now.saturating_add(self.max_horizon) {
+            return Err("the deadline is further out than this venue will hold a \
+nullifier for");
+        }
         if now > instruction.deadline {
             return Err("past the deadline");
         }
@@ -198,6 +222,10 @@ impl Venue {
             return Err("already settled");
         }
         let mut transcript = Transcript::new(b"qomm:zkpi:ranges");
+        if self.amount_bits != self.price_bits {
+            return Err("this venue declares different widths for amount and price, \
+and one aggregated range proof cannot show two widths");
+        }
         if !self.ranges.verify(&mut transcript, &instruction.ranges,
                                &instruction.range_commitments) {
             return Err("amount or price outside the published bounds");
