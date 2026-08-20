@@ -2,6 +2,85 @@
 
 Proof-carrying instructions: a venue's decision, provable without the inputs that produced it.
 
+## What it does
+
+```mermaid
+flowchart LR
+    subgraph known["what the quorum computes over"]
+        direction TB
+        R["the request<br/>asset, size, side"]
+        P["each maker's<br/>pricing policy"]
+        W["the winner<br/>and its price"]
+    end
+
+    subgraph published["what is published"]
+        direction TB
+        C["committed<br/>instruction"]
+        N["nullifier"]
+        D["deadline"]
+        S["quorum<br/>signature"]
+    end
+
+    subgraph venue["what a settlement venue checks"]
+        direction TB
+        V["in range<br/>unspent<br/>in time<br/>signed by the quorum"]
+    end
+
+    R --> C
+    P --> C
+    W --> C
+    C --> V
+    N --> V
+    D --> V
+    S --> V
+
+    known -. "never crosses" .-> venue
+
+    classDef secret fill:#F3E4E3,stroke:#B08C89,color:#3A2A29
+    classDef wire fill:#E8EFE6,stroke:#8FA88A,color:#243024
+    class R,P,W secret
+    class C,N,D,S,V wire
+```
+
+## What it is made of
+
+```mermaid
+flowchart TB
+    subgraph audited["used, not rewritten"]
+        DALEK["curve25519-dalek<br/>ristretto255"]
+        BP["bulletproofs<br/>range proofs"]
+        FROST["frost-ristretto255<br/>threshold signatures"]
+    end
+
+    subgraph zk["qomm-zk"]
+        PED["pedersen<br/>commitments, asset tags"]
+        SIG["sigma<br/>opening, cross-generator, product"]
+        RNG["range"]
+        OOM["oneofmany<br/>Groth-Kohlweiss"]
+        ORD["or_dleq"]
+        ADP["adaptor<br/>pre-sign, adapt, extract"]
+    end
+
+    subgraph pi["qomm-zkpi"]
+        ISS["issuer<br/>KYB credentials"]
+        INS["instruction<br/>commit, bound, nullify"]
+        QUO["quorum<br/>who signed it"]
+    end
+
+    DALEK --> PED
+    BP --> RNG
+    FROST --> QUO
+    PED --> SIG
+    PED --> OOM
+    PED --> ORD
+    SIG --> ADP
+    SIG --> INS
+    RNG --> INS
+    OOM --> ISS
+    ORD --> ISS
+    INS --> QUO
+```
+
 Exported from a single research tree by `scripts/export_repos.py`, which is why
 the layout is regular across the three repositories and why nothing here is
 hand-maintained. Corrections are welcome; they belong upstream, and the export

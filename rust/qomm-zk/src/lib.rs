@@ -6,6 +6,7 @@
 //! Tari Labs, with the dalek floor at 4.1.3 for RUSTSEC-2024-0344. What is
 //! written here is what has no audited equivalent: the sigma protocols this
 //! design needs, and the one-out-of-many proof.
+pub mod adaptor;
 pub mod pedersen;
 pub mod oneofmany;
 pub mod or_dleq;
