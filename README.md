@@ -92,6 +92,7 @@ Rust:
 
 - `rust/qomm-zk`
 - `rust/qomm-zkpi`
+- `rust/qomm-measure`
 
 Python:
 

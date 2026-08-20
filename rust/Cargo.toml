@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["qomm-zk", "qomm-zkpi"]
+members = ["qomm-zk", "qomm-zkpi", "qomm-measure"]
 
 [workspace.package]
 version = "0.1.0"
@@ -26,3 +26,4 @@ frost-core = "3.0"
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 qomm-zk = { path = "qomm-zk" }
 qomm-zkpi = { path = "qomm-zkpi" }
+qomm-measure = { path = "qomm-measure" }
