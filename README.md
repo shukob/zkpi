@@ -110,6 +110,7 @@ the runners wrote them. Each carries the host it ran on as a label (`host-a`,
 ## Documents
 
 - [`POSITION.md`](POSITION.md) --- what is new here and what is not, stated line by line against the nearest prior work
+- [`ACCOUNTABILITY.md`](ACCOUNTABILITY.md) --- what happens when a node misbehaves: the five rungs from abort to guaranteed output delivery, and which one each mechanism here reaches
 
 ## Running it
 
