@@ -196,3 +196,70 @@ fn a_venue_will_not_pretend_one_range_proof_shows_two_widths() {
                Err("this venue declares different widths for amount and price, \
 and one aggregated range proof cannot show two widths"));
 }
+
+/// A payment from a handle to itself moves nothing and burns a nullifier.
+#[test]
+fn a_payment_to_oneself_is_refused() {
+    let mut rng = OsRng;
+    let q = quorum(&mut rng);
+    let handle = RistrettoPoint::mul_base(&Scalar::from(11u64));
+    let issuer = Issuer::new(Pedersen::new(b"qomm:zkpi:v1"), Bounds::default());
+    let (digest, _, partial) = issuer
+        .build(100, 99_990, 3, handle, handle, 1_500, [7u8; 32], 1_599_845, &mut rng)
+        .unwrap();
+    let instruction = partial.sealed(sign(&q, &digest, 3, &mut rng));
+    assert_eq!(venue(&q).verify(&instruction, 1_000),
+               Err("the payer and the payee are the same handle"));
+}
+
+/// A signature made for one venue must not settle at another. The domain is in
+/// the digest, so an instruction built for one does not verify at the other.
+#[test]
+fn an_instruction_does_not_carry_to_another_venue() {
+    let mut rng = OsRng;
+    let q = quorum(&mut rng);
+    let (instruction, _) = issue(&mut rng, &q, 100, 99_990, 1_500);
+    let mut elsewhere = venue(&q);
+    elsewhere.domain = b"qomm:some-other-rail".to_vec();
+    assert!(elsewhere.verify(&instruction, 1_000).is_err(),
+            "an instruction signed for one venue settled at another");
+}
+
+/// A quorum nobody dealt. `deal_quorum` hands every secret share to one caller,
+/// who can then sign alone -- which is the property a quorum exists to remove.
+/// It is a fixture, and this is what a deployment runs instead.
+#[test]
+fn a_dkg_quorum_signs_an_instruction_with_no_dealer() {
+    let mut rng = OsRng;
+    let (packages, public) = qomm_zkpi::distributed_key_generation(7, 3, &mut rng)
+        .expect("dkg");
+    assert_eq!(packages.len(), 7);
+
+    let issuer = Issuer::new(Pedersen::new(b"qomm:zkpi:v1"), Bounds::default());
+    let (digest, _, partial) = issuer
+        .build(100, 99_990, 3,
+               RistrettoPoint::mul_base(&Scalar::from(11u64)),
+               RistrettoPoint::mul_base(&Scalar::from(22u64)),
+               1_500, [7u8; 32], 1_599_845, &mut rng)
+        .unwrap();
+
+    let chosen: Vec<_> = packages.keys().take(3).cloned().collect();
+    let (mut nonces, mut commitments) = (BTreeMap::new(), BTreeMap::new());
+    for id in &chosen {
+        let (n, c) = frost::round1::commit(packages[id].signing_share(), &mut rng);
+        nonces.insert(*id, n);
+        commitments.insert(*id, c);
+    }
+    let package = frost::SigningPackage::new(commitments, &digest);
+    let mut shares = BTreeMap::new();
+    for id in &chosen {
+        shares.insert(*id,
+            frost::round2::sign(&package, &nonces[id], &packages[id]).unwrap());
+    }
+    let signature = frost::aggregate(&package, &shares, &public).unwrap();
+    let instruction = partial.sealed(signature);
+
+    let mut venue = Venue::new(Pedersen::new(b"qomm:zkpi:v1"), &Bounds::default(),
+                               public);
+    assert_eq!(venue.verify(&instruction, 1_000), Ok(()));
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import copy
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -89,16 +90,40 @@ def test_swapping_minimality_proofs_fails(group):
     assert not ok and "at least the winner" in reason
 
 
-def test_an_expired_policy_cannot_be_proved(group):
-    makers = _makers()
+def test_an_ineligible_maker_is_provable_and_cannot_win(group):
+    """It used to be unprovable, which left leaving it out as the only option.
+
+    A negative difference has no range proof, so an expired or oversized maker
+    could not appear in a quote at all --- and a quote that silently drops a
+    maker is exactly what the register exists to catch. Eligibility is now a
+    bit that can be zero, so the maker appears, is gated to the sentinel, and
+    loses.
+    """
+    makers = _makers(group=group)
     makers[0] = MakerWitness(**{**makers[0].__dict__, "expiry": 999})
-    with pytest.raises(ValueError):
-        _prove(group, makers, now=1_000)
+    proof, public = _prove(group, makers, now=1_000)
+    ok, why = QuoteVerifier(group).verify(proof, public)
+    assert ok, why
+    assert proof.winner_index != 0, "an expired maker won the quote"
 
 
-def test_a_request_over_the_size_limit_cannot_be_proved(group):
-    with pytest.raises(ValueError):
-        _prove(group, qty=100_000)
+def test_a_maker_over_the_size_limit_is_provable_and_cannot_win(group):
+    makers = _makers(group=group)
+    makers[0] = MakerWitness(**{**makers[0].__dict__, "maxqty": 10})
+    proof, public = _prove(group, makers, qty=100)
+    ok, why = QuoteVerifier(group).verify(proof, public)
+    assert ok, why
+    assert proof.winner_index != 0, "a maker over its size limit won the quote"
+
+
+def test_a_request_beyond_every_maker_gets_no_quote(group):
+    """Every maker gates off, so every key is the sentinel and nobody wins on
+    price. The circuit answers "no quote" rather than refusing to answer."""
+    proof, public = _prove(group, qty=100_000)
+    ok, why = QuoteVerifier(group).verify(proof, public)
+    assert ok, why
+    assert proof.winner_value >= public["sentinel"], (
+        "a request nobody can fill produced a real price")
 
 
 def test_a_tampered_product_proof_fails(group):
@@ -244,3 +269,51 @@ def test_the_registry_digest_is_a_function_of_the_whole_set_and_its_order(group)
     assert registry_digest(group, a) == registry_digest(group, a)
     assert registry_digest(group, a) != registry_digest(group, list(reversed(a)))
     assert registry_digest(group, a) != registry_digest(group, a[:-1])
+
+
+# --- an eligible maker cannot be switched off -------------------------------
+#
+# `ok` used to be committed with a bit proof and nothing else. `fits` and
+# `fresh` were shown non-negative and never tied to it, so setting `ok = 0` for
+# an eligible maker left both range proofs passing on non-negative values and
+# gated that maker to the sentinel. Suppressing the best price was free.
+
+def test_the_eligibility_bit_is_the_conjunction_and_not_a_choice(group):
+    """The forgery: gate off the maker that would have won."""
+    makers = _makers(group=group)
+    proof, public = _prove(group, makers)
+    verifier = QuoteVerifier(group)
+    assert verifier.verify(proof, public)[0]
+
+    winner = proof.winner_index
+    key = Pedersen(group, b"qomm:quote:v1")
+    forged = copy.deepcopy(proof)
+    target = forged.maker_proofs[winner]
+    blinding = key.random_blinding()
+    target.commitments["ok"] = key.commit(0, blinding)
+    ok, why = verifier.verify(forged, public)
+    assert not ok, "the winning maker was gated off and the proof still verified"
+    assert "conjunction" in why or "gated" in why, why
+
+
+def test_the_size_test_is_taken_from_the_register_not_from_the_proof(group):
+    """A prover that picks what it proves eligibility about picks the answer."""
+    makers = _makers(group=group)
+    proof, public = _prove(group, makers)
+    key = Pedersen(group, b"qomm:quote:v1")
+    forged = copy.deepcopy(proof)
+    forged.maker_proofs[0].commitments["fits"] = key.commit(10 ** 6,
+                                                            key.random_blinding())
+    ok, why = QuoteVerifier(group).verify(forged, public)
+    assert not ok and "maxqty - quantity" in why
+
+
+def test_the_freshness_test_is_taken_from_the_register_and_the_clock(group):
+    makers = _makers(group=group)
+    proof, public = _prove(group, makers)
+    key = Pedersen(group, b"qomm:quote:v1")
+    forged = copy.deepcopy(proof)
+    forged.maker_proofs[0].commitments["fresh_t_input"] = key.commit(
+        10 ** 6, key.random_blinding())
+    ok, why = QuoteVerifier(group).verify(forged, public)
+    assert not ok and "expiry - now - 1" in why

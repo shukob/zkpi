@@ -1,9 +1,9 @@
 {
   "artifacts": {
     "quote_proof.json": {
-      "bytes": 2318,
-      "host": "host-c",
-      "sha256": "6b92293d1962cdd795b20f963cbae04676673977d29a43534a441d7df27ae770"
+      "bytes": 5903,
+      "host": "host-a",
+      "sha256": "c588cb6b900d2a823aaa034936fcb76c71c6cffb68de760b200a34c39364bb2b"
     },
     "state_audit.json": {
       "bytes": 3305,
@@ -23,5 +23,5 @@
       "sha256": "d21e3a7aa980291e399d05d3e8f050d25878ead7d93f568144849ad92096deba"
     }
   },
-  "commit": "ac1fc710b3ddd9ee70e0b8641c735c421470c242"
+  "commit": "1bfe4b14c6bffde669559b8d08c5ca87e05ece21"
 }

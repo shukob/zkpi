@@ -25,6 +25,7 @@ from scripts.measure import exact, render, summarise      # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from scripts.run_defmi import calibration                                    # noqa: E402                                              # noqa: E402
 from zk.quote_proof import MakerWitness, QuoteProof, QuoteProver, QuoteVerifier  # noqa: E402
+from zk.quote_proof import FIELDS  # noqa: E402
 from zk import threshold_sigma                                                # noqa: E402
 from zk.threshold_sigma import deal, joint_prove_opening                      # noqa: E402
 
@@ -33,12 +34,19 @@ from scripts.hosts import this_host                                          # n
 SENTINEL = 1 << 20
 
 
-def makers_for(n: int, seed: int) -> list[MakerWitness]:
+def makers_for(n: int, seed: int, key=None) -> list[MakerWitness]:
+    """Policies as they go on the record: values and the blindings that hide them.
+
+    The blindings are what make the quote proof a statement about a registered
+    market rather than about a set the prover assembled at proving time.
+    """
     rng = random.Random(seed)
+    key = key or Pedersen(make_group("ed25519"), b"qomm:quote:v1")
     return [MakerWitness(mid=100_000 + rng.randint(-15, 15), half=rng.randint(5, 40),
                          slope=rng.choice([0, 1, 2]), invcoef=rng.choice([0, 1, 2]),
                          inv=rng.randint(0, 50), maxqty=rng.choice([200, 400]),
-                         expiry=1_000 + rng.randint(1, 600), active=1)
+                         expiry=1_000 + rng.randint(1, 600), active=1,
+                         blindings={f: key.random_blinding() for f in FIELDS})
             for _ in range(n)]
 
 
@@ -97,25 +105,42 @@ def forgery_controls(group) -> list[dict]:
     out.append({"control": "winner swapped to a non-minimal maker",
                 "rejected": not ok, "reason": message})
 
-    # 2. a maker tries to prove an expiry that has already passed
+    # 2. an ineligible maker appears and loses, rather than being unprovable
+    #
+    # These two controls used to check that the prover *refused*. That was the
+    # wrong property: a negative difference has no range proof, so an expired or
+    # oversized maker could not be quoted at all, and leaving it out silently
+    # was the only way to serve the request. Eligibility is now a bit that can
+    # be zero, so the maker appears in the set, is gated to the sentinel, and
+    # cannot win --- which is the property worth having.
     stale = list(makers)
     stale[0] = MakerWitness(**{**makers[0].__dict__, "expiry": 999})
-    try:
-        prover.prove(stale, qty=100, direction=0, now=1_000, sentinel=SENTINEL, n_slots=8)
-        out.append({"control": "expired maker", "rejected": False,
-                    "reason": "prover accepted an expired policy"})
-    except ValueError as exc:
-        out.append({"control": "expired maker", "rejected": True, "reason": str(exc)[:70]})
+    stale_proof, stale_public = prover.prove(
+        stale, qty=100, direction=0, now=1_000, sentinel=SENTINEL, n_slots=8)
+    ok, message = verifier.verify(stale_proof, stale_public)
+    out.append({"control": "expired maker appears and cannot win",
+                "rejected": ok and stale_proof.winner_index != 0,
+                "reason": message if not ok else
+                          f"gated off; winner is maker {stale_proof.winner_index}"})
 
-    # 3. a request larger than a maker's size limit
-    try:
-        prover.prove(makers, qty=100_000, direction=0, now=1_000,
-                     sentinel=SENTINEL, n_slots=8)
-        out.append({"control": "request over the size limit", "rejected": False,
-                    "reason": "prover accepted an over-size request"})
-    except ValueError as exc:
-        out.append({"control": "request over the size limit", "rejected": True,
-                    "reason": str(exc)[:70]})
+    # 3. a request larger than every maker's size limit gets no quote
+    wide_proof, wide_public = prover.prove(
+        makers, qty=100_000, direction=0, now=1_000, sentinel=SENTINEL, n_slots=8)
+    ok, message = verifier.verify(wide_proof, wide_public)
+    out.append({"control": "request nobody can fill answers `no quote`",
+                "rejected": ok and wide_proof.winner_value >= SENTINEL,
+                "reason": message if not ok else
+                          "every maker gated to the sentinel"})
+
+    # 3b. the forgery this replaced: switch off an eligible maker
+    import copy as _copy
+    gated = _copy.deepcopy(proof)
+    blinding = prover.key.random_blinding()
+    gated.maker_proofs[proof.winner_index].commitments["ok"] = \
+        prover.key.commit(0, blinding)
+    ok, message = verifier.verify(gated, public)
+    out.append({"control": "the winning maker switched off",
+                "rejected": not ok, "reason": message})
 
     # 4. tampered minimality proof
     swapped = list(proof.minimality)

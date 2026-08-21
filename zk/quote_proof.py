@@ -99,8 +99,12 @@ class MakerProof:
     gate_cost: ProductProof
     fits: RangeProof
     fresh: RangeProof
+    fits_bit: BitProof
+    fresh_bit: BitProof
+    fits_product: ProductProof
+    fresh_product: ProductProof
     active_bit: BitProof
-    ok_bit: BitProof
+    conjunction: tuple            # (fits and fresh, that and active)
     commitments: dict
 
 
@@ -126,6 +130,44 @@ class QuoteProver:
 
     def _blind(self) -> int:
         return self.key.random_blinding()
+
+    def _ge_zero_bit(self, value: int, blinding: int, commitment, tag: bytes):
+        """A bit that is 1 exactly when the committed value is non-negative.
+
+        The same shape the rule language uses: one product for `bit * value`,
+        and one range proof on `t = 2P - S + B - g`, which is non-negative when
+        the bit is right and negative when it is not. Total in both directions,
+        so an ineligible maker is representable rather than unprovable.
+        """
+        key, order = self.key, self.group.order
+        holds = 1 if value >= 0 else 0
+        r_bit = self._blind()
+        c_bit = key.commit(holds, r_bit)
+        bit_proof = prove_bit(key, c_bit, holds, r_bit, tag + b":bit")
+
+        r_product = self._blind()
+        product_proof = prove_product(key, c_bit, holds, r_bit, value, blinding,
+                                      r_product, tag + b":prod")
+        c_product = key.commit(holds * value, r_product)
+
+        witness = 2 * holds * value - value + holds - 1
+        r_witness = (2 * r_product - blinding + r_bit) % order
+        c_witness = self.group.mul(
+            self.group.mul(self.group.point_pow(c_product, 2),
+                           self.group.neg(commitment)), c_bit)
+        c_witness = self.group.mul(c_witness, self.group.neg(key.commit(1, 0)))
+        range_proof = prove_range(key, c_witness, witness, r_witness,
+                                  self.sentinel_bits + 2, tag + b":ge")
+        return (holds, r_bit, c_bit, range_proof, bit_proof, product_proof,
+                c_witness, c_product)
+
+    def _and(self, left, right, tag: bytes):
+        """Two bits multiplied. The result is a bit because the factors are."""
+        key = self.key
+        (a, r_a, c_a), (b, r_b, c_b) = left, right
+        r_out = self._blind()
+        proof = prove_product(key, c_a, a, r_a, b, r_b, r_out, tag)
+        return (a * b, r_out, key.commit(a * b, r_out)), proof
 
     def prove(self, makers: Sequence[MakerWitness], *, qty: int, direction: int,
               now: int, sentinel: int, n_slots: int,
@@ -177,24 +219,37 @@ class QuoteProver:
             r_ask = (r_mid + r_half + r_depth + r_skew) % order
             r_bid = (r_mid - r_half - r_depth + r_skew) % order
 
-            # eligibility, each piece proved rather than asserted
+            # Eligibility, proved in both directions and then multiplied out.
+            #
+            # It used to be two range proofs and a free bit: `fits` and `fresh`
+            # were shown non-negative, `ok` was committed with a bit proof, and
+            # nothing tied `ok` to them. Two things followed. An *ineligible*
+            # maker could not be proved at all, since a negative difference has
+            # no range proof --- the only way to quote was to leave it out, and
+            # the register now makes that visible. And an *eligible* one could
+            # be switched off: set `ok = 0`, both range proofs still pass on
+            # non-negative values, and that maker is gated to the sentinel and
+            # out of contention. Suppressing the best maker was free.
             r_maxqty, r_expiry = blind["maxqty"], blind["expiry"]
             c_fits = key.commit(maker.maxqty - qty, (r_maxqty - r_qty) % order)
-            fits_proof = prove_range(key, c_fits, maker.maxqty - qty,
-                                     (r_maxqty - r_qty) % order, self.sentinel_bits,
-                                     tag + b":fits")
+            fits = self._ge_zero_bit(maker.maxqty - qty, (r_maxqty - r_qty) % order,
+                                     c_fits, tag + b":fits")
             c_fresh = key.commit(maker.expiry - now, r_expiry)
-            fresh_proof = prove_range(key, c_fresh, maker.expiry - now, r_expiry,
-                                      self.sentinel_bits, tag + b":fresh")
+            fresh = self._ge_zero_bit(maker.expiry - now - 1, r_expiry,
+                                      shift_commitment(key, c_fresh, 1),
+                                      tag + b":fresh")
 
             r_active = blind["active"]
             c_active = key.commit(maker.active, r_active)
             active_proof = prove_bit(key, c_active, maker.active, r_active, tag + b":active")
 
-            ok = 1 if (maker.active == 1 and qty <= maker.maxqty and maker.expiry > now) else 0
-            r_ok = self._blind()
-            c_ok = key.commit(ok, r_ok)
-            ok_proof = prove_bit(key, c_ok, ok, r_ok, tag + b":ok")
+            # ok = fits and fresh and active, as two products of bits. A product
+            # of two proved bits is a bit, so `ok` needs no bit proof of its own
+            # and, more to the point, has no freedom left.
+            both, conj_first = self._and(fits[:3], fresh[:3], tag + b":ok:1")
+            ok_wire, conj_second = self._and(
+                both, (maker.active, r_active, c_active), tag + b":ok:2")
+            ok, r_ok, c_ok = ok_wire
 
             cost = -bid if direction == 1 else ask
             r_cost = (-r_bid if direction == 1 else r_ask) % order
@@ -215,9 +270,17 @@ class QuoteProver:
 
             maker_proofs.append(MakerProof(
                 depth=depth_proof, skew=skew_proof, gate_cost=gated_proof,
-                fits=fits_proof, fresh=fresh_proof,
-                active_bit=active_proof, ok_bit=ok_proof,
+                fits=fits[3], fresh=fresh[3],
+                fits_bit=fits[4], fresh_bit=fresh[4],
+                fits_product=fits[5], fresh_product=fresh[5],
+                active_bit=active_proof,
+                conjunction=(conj_first, conj_second),
                 commitments={
+                    "fits_bit": fits[2], "fits_t": fits[6],
+                    "fresh_bit": fresh[2], "fresh_t": fresh[6],
+                    "fresh_t_input": shift_commitment(key, c_fresh, 1),
+                    "fits_product": fits[7], "fresh_product": fresh[7],
+                    "both": both[2],
                     "mid": key.commit(maker.mid, r_mid),
                     "half": key.commit(maker.half, r_half),
                     "maxqty": key.commit(maker.maxqty, r_maxqty),
@@ -271,6 +334,22 @@ class QuoteVerifier:
         self.key = key or Pedersen(group, b"qomm:policy:v1")
         self.sentinel_bits = sentinel_bits
 
+    def _check_ge_zero_bit(self, c, maker, name: str, base, tag: bytes) -> bool:
+        """The mirror of `_ge_zero_bit`: one product and one derived range."""
+        key, group = self.key, self.group
+        bit = c[f"{name}_bit"]
+        product = c[f"{name}_product"]
+        if not verify_bit(key, bit, getattr(maker, f"{name}_bit"), tag + b":bit"):
+            return False
+        if not verify_product(key, bit, base, product,
+                              getattr(maker, f"{name}_product"), tag + b":prod"):
+            return False
+        witness = group.mul(group.mul(group.point_pow(product, 2), group.neg(base)), bit)
+        witness = group.mul(witness, group.neg(key.commit(1, 0)))
+        if group.encode(witness) != group.encode(c[f"{name}_t"]):
+            return False
+        return verify_range(key, c[f"{name}_t"], getattr(maker, name), tag + b":ge")
+
     def verify(self, proof: QuoteProof, public: Mapping[str, Any],
                context: bytes = b"") -> tuple[bool, str]:
         key = self.key
@@ -307,14 +386,38 @@ class QuoteVerifier:
             if not verify_product(key, c["invcoef"], c["inv"], c["skew"], maker.skew,
                                   tag + b":skew"):
                 return False, f"maker {index}: skew is not invcoef * inventory"
-            if not verify_range(key, c["fits"], maker.fits, tag + b":fits"):
-                return False, f"maker {index}: size limit not shown to hold"
-            if not verify_range(key, c["fresh"], maker.fresh, tag + b":fresh"):
-                return False, f"maker {index}: expiry not shown to be in the future"
+            # `fits` and `fresh` are derived, not published: the size test is
+            # `maxqty - qty` against the register and the request, and the
+            # freshness test is `expiry - now - 1` against the register and the
+            # clock. Taking them from the proof would let a prover decide what
+            # it was proving eligibility about.
+            derived_fits = group.mul(c["maxqty"], group.neg(c_qty))
+            if group.encode(derived_fits) != group.encode(c["fits"]):
+                return False, (f"maker {index}: the size test is not "
+                               "`maxqty - quantity` on the registered policy")
+            derived_fresh = shift_commitment(
+                key, group.mul(c["expiry"], group.neg(key.commit(public["now"], 0))), 1)
+            if group.encode(derived_fresh) != group.encode(c["fresh_t_input"]):
+                return False, (f"maker {index}: the freshness test is not "
+                               "`expiry - now - 1` on the registered policy")
+            for name, base in (("fits", c["fits"]), ("fresh", c["fresh_t_input"])):
+                if not self._check_ge_zero_bit(c, maker, name, base,
+                                               tag + b":" + name.encode()):
+                    return False, (f"maker {index}: the {name} test is not what "
+                                   "its bit says it is")
             if not verify_bit(key, c["active"], maker.active_bit, tag + b":active"):
                 return False, f"maker {index}: active flag is not a bit"
-            if not verify_bit(key, c["ok"], maker.ok_bit, tag + b":ok"):
-                return False, f"maker {index}: eligibility flag is not a bit"
+            # ok = fits and fresh and active, proved rather than committed. This
+            # is what stops an eligible maker being switched off: the bit is a
+            # product of the three and none of them is the prover's to choose.
+            first, second = maker.conjunction
+            if not verify_product(key, c["fits_bit"], c["fresh_bit"], c["both"],
+                                  first, tag + b":ok:1"):
+                return False, f"maker {index}: `fits and fresh` does not check out"
+            if not verify_product(key, c["both"], c["active"], c["ok"],
+                                  second, tag + b":ok:2"):
+                return False, (f"maker {index}: eligibility is not the "
+                               "conjunction of its three tests")
             if not verify_product(key, c["ok"], c["shifted_cost"], c["gated"],
                                   maker.gate_cost, tag + b":gate"):
                 return False, f"maker {index}: cost is not gated by eligibility"

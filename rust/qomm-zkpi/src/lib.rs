@@ -70,12 +70,30 @@ pub struct Openings {
     pub asset: Scalar,
 }
 
+/// The domain a venue uses when it declares none. Naming it here rather than
+/// leaving the field out is the point: a deployment that shares a quorum across
+/// two rails has to choose two domains, and one that forgets gets this one for
+/// both and can see that it did.
+pub const DEFAULT_DOMAIN: &[u8] = b"qomm:default-venue";
+
 impl Instruction {
     /// Binds the signature to the instruction; a signature cannot be replayed
     /// onto a different one.
+    /// The venue, chain, rail and protocol version an instruction is for.
+    ///
+    /// Without it a signed instruction is valid at every venue that shares the
+    /// quorum, so a payment authorised for one rail settles on another. It is
+    /// a field rather than a constant because the venue supplies it, and the
+    /// digest covers it because that is what stops it being changed.
     pub fn digest(&self) -> [u8; 64] {
+        self.digest_for(DEFAULT_DOMAIN)
+    }
+
+    pub fn digest_for(&self, domain: &[u8]) -> [u8; 64] {
         let mut hasher = Sha512::new();
-        hasher.update(b"QOMM:ZKPI:v1");
+        hasher.update(b"QOMM:ZKPI:v2");
+        hasher.update((domain.len() as u64).to_be_bytes());
+        hasher.update(domain);
         for point in [&self.amount_commitment, &self.price_commitment,
                       &self.asset_commitment, &self.payer_handle, &self.payee_handle] {
             hasher.update(point.compress().as_bytes());
@@ -105,13 +123,15 @@ pub struct Issuer {
     pub key: Pedersen,
     pub bounds: Bounds,
     pub ranges: RangeCtx,
+    /// The venue this issuer signs for. Must match the venue's own.
+    pub domain: Vec<u8>,
 }
 
 impl Issuer {
     pub fn new(key: Pedersen, bounds: Bounds) -> Self {
         let bits = bounds.amount_bits.max(bounds.price_bits);
         let ranges = RangeCtx::new(bits, 2);
-        Issuer { key, bounds, ranges }
+        Issuer { domain: DEFAULT_DOMAIN.to_vec(), key, bounds, ranges }
     }
 
     /// Everything except the signature, which the quorum adds.
@@ -136,7 +156,7 @@ impl Issuer {
             ranges, range_commitments,
             payer_handle, payee_handle, deadline, nonce, quote_key,
         };
-        Ok((partial.digest().to_vec(), openings, partial))
+        Ok((partial.digest_for(&self.domain).to_vec(), openings, partial))
     }
 }
 
@@ -155,9 +175,21 @@ pub struct PartialInstruction {
 }
 
 impl PartialInstruction {
+    /// The venue, chain, rail and protocol version an instruction is for.
+    ///
+    /// Without it a signed instruction is valid at every venue that shares the
+    /// quorum, so a payment authorised for one rail settles on another. It is
+    /// a field rather than a constant because the venue supplies it, and the
+    /// digest covers it because that is what stops it being changed.
     pub fn digest(&self) -> [u8; 64] {
+        self.digest_for(DEFAULT_DOMAIN)
+    }
+
+    pub fn digest_for(&self, domain: &[u8]) -> [u8; 64] {
         let mut hasher = Sha512::new();
-        hasher.update(b"QOMM:ZKPI:v1");
+        hasher.update(b"QOMM:ZKPI:v2");
+        hasher.update((domain.len() as u64).to_be_bytes());
+        hasher.update(domain);
         for point in [&self.amount_commitment, &self.price_commitment,
                       &self.asset_commitment, &self.payer_handle, &self.payee_handle] {
             hasher.update(point.compress().as_bytes());
@@ -188,6 +220,8 @@ impl PartialInstruction {
 /// The settlement side: verify, then spend once.
 pub struct Venue {
     pub key: Pedersen,
+    /// Which venue, chain, rail and protocol version this is. See `digest_for`.
+    pub domain: Vec<u8>,
     pub ranges: RangeCtx,
     pub group_public: frost::keys::PublicKeyPackage,
     spent: HashSet<[u8; 32]>,
@@ -205,7 +239,8 @@ impl Venue {
     pub fn new(key: Pedersen, bounds: &Bounds,
                group_public: frost::keys::PublicKeyPackage) -> Self {
         let bits = bounds.amount_bits.max(bounds.price_bits);
-        Venue { key, ranges: RangeCtx::new(bits, 2), group_public,
+        Venue { key, domain: DEFAULT_DOMAIN.to_vec(),
+                ranges: RangeCtx::new(bits, 2), group_public,
                 spent: HashSet::new(), max_horizon: bounds.max_horizon,
                 amount_bits: bounds.amount_bits, price_bits: bounds.price_bits }
     }
@@ -217,6 +252,12 @@ nullifier for");
         }
         if now > instruction.deadline {
             return Err("past the deadline");
+        }
+        // A payment from a handle to itself moves nothing and burns a
+        // nullifier, and both rails would net to zero while the settlement
+        // still counted as one. Nothing downstream refused it.
+        if instruction.payer_handle.compress() == instruction.payee_handle.compress() {
+            return Err("the payer and the payee are the same handle");
         }
         if self.spent.contains(&instruction.nullifier()) {
             return Err("already settled");
@@ -239,7 +280,7 @@ and one aggregated range proof cannot show two widths");
         }
         self.group_public
             .verifying_key()
-            .verify(&instruction.digest(), &instruction.signature)
+            .verify(&instruction.digest_for(&self.domain), &instruction.signature)
             .map_err(|_| "the quorum signature does not verify")?;
         Ok(())
     }
@@ -254,6 +295,16 @@ and one aggregated range proof cannot show two widths");
 }
 
 /// A trusted-dealer quorum, which is what a computing node set is.
+/// A quorum from a trusted dealer. **A fixture, not a deployment.**
+///
+/// One call makes every secret share and hands them all back to the caller, so
+/// whoever runs it can sign alone --- which is the property the quorum exists
+/// to remove. It is here because every test and every measurement needs a
+/// quorum and none of them is testing the setup.
+///
+/// A deployment runs `distributed_key_generation` below instead: each node
+/// draws its own polynomial, and no party ever holds the group secret. The
+/// difference is the whole trust model, so the name says which this is.
 pub fn deal_quorum<R: RngCore + CryptoRng>(
     nodes: u16, threshold: u16, rng: &mut R,
 ) -> Result<(BTreeMap<frost::Identifier, frost::keys::SecretShare>,
@@ -261,4 +312,60 @@ pub fn deal_quorum<R: RngCore + CryptoRng>(
     frost::keys::generate_with_dealer(
         nodes, threshold, frost::keys::IdentifierList::Default, rng)
         .map_err(|_| "dealing failed")
+}
+
+/// A quorum nobody dealt: two rounds of FROST DKG, run to completion.
+///
+/// Each node commits to its own polynomial in round one, exchanges shares in
+/// round two, and derives the group public key from what it received. No party
+/// holds the group secret at any point, which is what `deal_quorum` gives away.
+pub fn distributed_key_generation<R: RngCore + CryptoRng>(
+    nodes: u16, threshold: u16, rng: &mut R,
+) -> Result<(BTreeMap<frost::Identifier, frost::keys::KeyPackage>,
+             frost::keys::PublicKeyPackage), &'static str> {
+    use frost::keys::dkg;
+    let ids: Vec<frost::Identifier> = (1..=nodes)
+        .map(|i| frost::Identifier::try_from(i).expect("identifier"))
+        .collect();
+
+    let mut secrets_one = BTreeMap::new();
+    let mut broadcast = BTreeMap::new();
+    for id in &ids {
+        let (secret, package) = dkg::part1(*id, nodes, threshold, &mut *rng)
+            .map_err(|_| "dkg round one failed")?;
+        secrets_one.insert(*id, secret);
+        broadcast.insert(*id, package);
+    }
+
+    let mut secrets_two = BTreeMap::new();
+    let mut directed: BTreeMap<frost::Identifier, BTreeMap<frost::Identifier, _>> =
+        ids.iter().map(|id| (*id, BTreeMap::new())).collect();
+    for id in &ids {
+        let others: BTreeMap<_, _> = broadcast.iter()
+            .filter(|(other, _)| *other != id)
+            .map(|(other, package)| (*other, package.clone()))
+            .collect();
+        let (secret, to_send) = dkg::part2(secrets_one[id].clone(), &others)
+            .map_err(|_| "dkg round two failed")?;
+        secrets_two.insert(*id, secret);
+        for (receiver, package) in to_send {
+            directed.get_mut(&receiver).ok_or("dkg addressed an absent node")?
+                .insert(*id, package);
+        }
+    }
+
+    let mut packages = BTreeMap::new();
+    let mut group = None;
+    for id in &ids {
+        let others: BTreeMap<_, _> = broadcast.iter()
+            .filter(|(other, _)| *other != id)
+            .map(|(other, package)| (*other, package.clone()))
+            .collect();
+        let (key_package, public) = dkg::part3(
+            &secrets_two[id], &others, &directed[id])
+            .map_err(|_| "dkg round three failed")?;
+        packages.insert(*id, key_package);
+        group = Some(public);
+    }
+    Ok((packages, group.ok_or("no nodes")?))
 }
