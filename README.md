@@ -107,6 +107,10 @@ Python:
 the runners wrote them. Each carries the host it ran on as a label (`host-a`,
 `host-b`, `host-c`); `scripts/hosts.py` is the mapping.
 
+## Documents
+
+- [`POSITION.md`](POSITION.md) --- what is new here and what is not, stated line by line against the nearest prior work
+
 ## Running it
 
 ```

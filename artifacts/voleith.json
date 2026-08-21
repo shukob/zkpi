@@ -1,0 +1,329 @@
+{
+  "host": "host-a",
+  "repeats": 30,
+  "modulus_bits": 127,
+  "depth": 8,
+  "tree_repeats": 16,
+  "soundness_bits": 128,
+  "caveat": "Pedersen is libsodium through PyNaCl, which is C. VOLEitH is hashlib plus CPython field arithmetic. The wall-clock ratio is an upper bound on the transform's cost, not an estimate of it. Bytes and hash counts do not have this problem.",
+  "arms": {
+    "pedersen": [
+      {
+        "accepted": true,
+        "why": "ok",
+        "prove_ms": {
+          "n": 30,
+          "mean": 1.7281778156757355,
+          "sd": 0.008554896536409564,
+          "median": 1.729610376060009,
+          "min": 1.7124270088970661,
+          "max": 1.7489781603217125,
+          "rsd": 0.004950240917810017
+        },
+        "verify_ms": {
+          "n": 30,
+          "mean": 1.4435233548283577,
+          "sd": 0.008884944741481434,
+          "median": 1.4425099361687899,
+          "min": 1.4298171736299992,
+          "max": 1.4722752384841442,
+          "rsd": 0.006155040520655726
+        },
+        "bytes": {
+          "exact": 608
+        },
+        "size_breakdown": {
+          "commitments": 512,
+          "mask_commitments": 32,
+          "openings": 32,
+          "opening_blindings": 32
+        },
+        "n_inputs": 16
+      },
+      {
+        "accepted": true,
+        "why": "ok",
+        "prove_ms": {
+          "n": 30,
+          "mean": 7.297001763557394,
+          "sd": 0.050831236628438366,
+          "median": 7.300777360796928,
+          "min": 7.201306987553835,
+          "max": 7.42873502895236,
+          "rsd": 0.006966044174786851
+        },
+        "verify_ms": {
+          "n": 30,
+          "mean": 6.052595237269998,
+          "sd": 0.06611881240385713,
+          "median": 6.0689745005220175,
+          "min": 5.906417965888977,
+          "max": 6.219533272087574,
+          "rsd": 0.010924043292490146
+        },
+        "bytes": {
+          "exact": 2144
+        },
+        "size_breakdown": {
+          "commitments": 2048,
+          "mask_commitments": 32,
+          "openings": 32,
+          "opening_blindings": 32
+        },
+        "n_inputs": 64
+      },
+      {
+        "accepted": true,
+        "why": "ok",
+        "prove_ms": {
+          "n": 30,
+          "mean": 18.635060048351686,
+          "sd": 0.11639906278429633,
+          "median": 18.612492131069303,
+          "min": 18.4965617954731,
+          "max": 19.1459939815104,
+          "rsd": 0.006246240284833002
+        },
+        "verify_ms": {
+          "n": 30,
+          "mean": 15.477241249755025,
+          "sd": 0.11904905579525886,
+          "median": 15.467896591871977,
+          "min": 15.210538171231747,
+          "max": 15.932260546833277,
+          "rsd": 0.007691878279479761
+        },
+        "bytes": {
+          "exact": 5440
+        },
+        "size_breakdown": {
+          "commitments": 5344,
+          "mask_commitments": 32,
+          "openings": 32,
+          "opening_blindings": 32
+        },
+        "n_inputs": 167
+      }
+    ],
+    "voleith": [
+      {
+        "accepted": true,
+        "why": "ok",
+        "prove_ms": {
+          "n": 30,
+          "mean": 21.95646899441878,
+          "sd": 0.7194363997121572,
+          "median": 22.23450760357082,
+          "min": 20.074542611837387,
+          "max": 22.726027760654688,
+          "rsd": 0.03276648899670681
+        },
+        "verify_ms": {
+          "n": 30,
+          "mean": 18.144824309274554,
+          "sd": 0.6309600095666504,
+          "median": 18.356535118073225,
+          "min": 16.463602893054485,
+          "max": 18.81511975079775,
+          "rsd": 0.034773552987456664
+        },
+        "bytes": {
+          "exact": 6960
+        },
+        "size_breakdown": {
+          "root": 32,
+          "witness_correction": 256,
+          "vole_corrections": 3840,
+          "opening": 16,
+          "tags": 256,
+          "copaths": 2048,
+          "punctured": 512
+        },
+        "n_inputs": 16
+      },
+      {
+        "accepted": true,
+        "why": "ok",
+        "prove_ms": {
+          "n": 30,
+          "mean": 38.74063819336394,
+          "sd": 0.4176559126650241,
+          "median": 38.78286271356046,
+          "min": 38.050577044487,
+          "max": 39.79035187512636,
+          "rsd": 0.010780821693757391
+        },
+        "verify_ms": {
+          "n": 30,
+          "mean": 35.004993776480354,
+          "sd": 0.4019029934960197,
+          "median": 35.08746484294534,
+          "min": 34.36107374727726,
+          "max": 36.02694906294346,
+          "rsd": 0.011481304526500329
+        },
+        "bytes": {
+          "exact": 19248
+        },
+        "size_breakdown": {
+          "root": 32,
+          "witness_correction": 1024,
+          "vole_corrections": 15360,
+          "opening": 16,
+          "tags": 256,
+          "copaths": 2048,
+          "punctured": 512
+        },
+        "n_inputs": 64
+      },
+      {
+        "accepted": true,
+        "why": "ok",
+        "prove_ms": {
+          "n": 30,
+          "mean": 73.05776034481823,
+          "sd": 1.159331420372661,
+          "median": 73.16776970401406,
+          "min": 68.9028287306428,
+          "max": 75.06336690858006,
+          "rsd": 0.01586869642459398
+        },
+        "verify_ms": {
+          "n": 30,
+          "mean": 69.93630244396627,
+          "sd": 1.1348729109492737,
+          "median": 69.92909545078874,
+          "min": 66.92343344911933,
+          "max": 72.40840280428529,
+          "rsd": 0.016227236374964867
+        },
+        "bytes": {
+          "exact": 45616
+        },
+        "size_breakdown": {
+          "root": 32,
+          "witness_correction": 2672,
+          "vole_corrections": 40080,
+          "opening": 16,
+          "tags": 256,
+          "copaths": 2048,
+          "punctured": 512
+        },
+        "n_inputs": 167
+      }
+    ]
+  },
+  "ratios": {
+    "16": {
+      "prove": 12.86,
+      "verify": 12.73,
+      "bytes": 11.45
+    },
+    "64": {
+      "prove": 5.31,
+      "verify": 5.78,
+      "bytes": 8.98
+    },
+    "167": {
+      "prove": 3.93,
+      "verify": 4.52,
+      "bytes": 8.39
+    }
+  },
+  "sweep": [
+    {
+      "depth": 4,
+      "leaves_per_tree": 16,
+      "repeats": 32,
+      "soundness_bits": 128,
+      "bytes": 89136,
+      "hashes": 1024
+    },
+    {
+      "depth": 6,
+      "leaves_per_tree": 64,
+      "repeats": 22,
+      "soundness_bits": 132,
+      "bytes": 62000,
+      "hashes": 2816
+    },
+    {
+      "depth": 8,
+      "leaves_per_tree": 256,
+      "repeats": 16,
+      "soundness_bits": 128,
+      "bytes": 45616,
+      "hashes": 8192
+    },
+    {
+      "depth": 10,
+      "leaves_per_tree": 1024,
+      "repeats": 13,
+      "soundness_bits": 130,
+      "bytes": 37488,
+      "hashes": 26624
+    },
+    {
+      "depth": 12,
+      "leaves_per_tree": 4096,
+      "repeats": 11,
+      "soundness_bits": 132,
+      "bytes": 32080,
+      "hashes": 90112
+    },
+    {
+      "depth": 14,
+      "leaves_per_tree": 16384,
+      "repeats": 10,
+      "soundness_bits": 140,
+      "bytes": 29488,
+      "hashes": 327680
+    },
+    {
+      "depth": 16,
+      "leaves_per_tree": 65536,
+      "repeats": 8,
+      "soundness_bits": 128,
+      "bytes": 23856,
+      "hashes": 1048576
+    }
+  ],
+  "linear_code": {
+    "note": "arithmetic only, not implemented",
+    "depth": 8,
+    "best": {
+      "k_C": 16,
+      "n_C": 31,
+      "d_C": 16,
+      "rows": 11,
+      "bytes": 10816,
+      "hashes": 15872
+    }
+  },
+  "phases": {
+    "leaves": {
+      "exact": 4096
+    },
+    "prg_bytes": {
+      "exact": 17784832
+    },
+    "xof_only_ms": {
+      "n": 5,
+      "mean": 30.737510975450277,
+      "sd": 0.9799521385032934,
+      "median": 30.40327411144972,
+      "min": 29.755875933915377,
+      "max": 32.29684103280306,
+      "rsd": 0.03188131073091672
+    },
+    "xof_and_packing_ms": {
+      "n": 5,
+      "mean": 55.27511164546013,
+      "sd": 1.5026790835996646,
+      "median": 54.34950161725283,
+      "min": 54.08465676009655,
+      "max": 57.54737788811326,
+      "rsd": 0.02718545542228829
+    }
+  }
+}

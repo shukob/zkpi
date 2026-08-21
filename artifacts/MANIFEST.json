@@ -11,6 +11,15 @@
       "python": "3.13.5",
       "sha256": "0add7cf1af6289c208068d23c18066ee6a577eeb2c9313da5b91a8ff420a6f4b"
     },
+    "voleith.json": {
+      "bytes": 7999,
+      "host": "host-a",
+      "sha256": "3d16660260a816af031bd23c9c6c318a315457182447046f5ad8fdc1c4e29b28"
+    },
+    "voleith_prediction.json": {
+      "bytes": 3658,
+      "sha256": "7f67d94ebedb88f4982ff6fde19714c05e40148a53415f71754592d732fb890e"
+    },
     "zk_bench.json": {
       "bytes": 15357,
       "host": "host-c",
@@ -23,5 +32,5 @@
       "sha256": "d21e3a7aa980291e399d05d3e8f050d25878ead7d93f568144849ad92096deba"
     }
   },
-  "commit": "9ff9f2dfb3e8d0873e8a3a425c9929f11082ad26"
+  "commit": "73a322aab019450de76f23d9ccb7c6c612292759"
 }

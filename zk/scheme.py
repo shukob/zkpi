@@ -38,7 +38,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, Sequence, runtime_checkable
 
 from .commit import Pedersen
 from .groups import DOMAIN
@@ -224,3 +224,135 @@ def make_scheme(name: str, **kwargs) -> CommitmentScheme:
         return VoleScheme(**kwargs)
     raise ValueError(f"unknown commitment scheme {name}; "
                      f"choose from ['pedersen', 'vole']")
+
+
+# --- the second seam, which the first one turned out to need ---------------
+#
+# `CommitmentScheme` above is shaped like Pedersen: one commitment per value,
+# combined by anyone who holds them. Writing the VOLE-in-the-Head strategy
+# showed that shape does not fit, and the mismatch is not an implementation
+# detail --- it is what the scheme is.
+#
+# A VOLEitH commitment is not per value. The prover commits to the whole vector
+# at once (a hash of 2^depth * repeats leaf commitments) and publishes one
+# correction per value against it; there is no object per value that a verifier
+# can hold and scale on its own, because scaling happens against a `Delta` that
+# does not exist until the proof is made. Forcing it through `commit/add/scale`
+# would have meant either lying about what the object is or reconstructing the
+# trees on every call.
+#
+# So the seam for a *publicly verifiable* comparison is one level up: commit to
+# a vector, prove one public linear statement about it, verify from the proof
+# alone. Pedersen implements it by delegating to `input_check`, which is what it
+# already did; VOLEitH implements it natively. Same statement, same coefficient
+# discipline, two schemes --- which is the only way the comparison means
+# anything.
+
+
+@runtime_checkable
+class LinearProofScheme(Protocol):
+    """Commit to a vector, prove one public linear combination of it."""
+
+    name: str
+    publicly_verifiable: bool
+    post_quantum: bool
+
+    def prove_linear(self, values: Sequence[int], context: bytes,
+                     challenge_bits: int = 40) -> Any: ...
+    def verify_linear(self, proof: Any, context: bytes,
+                      challenge_bits: int = 40) -> tuple[bool, str]: ...
+    def proof_bytes(self, proof: Any) -> int: ...
+    def size_breakdown(self, proof: Any) -> dict[str, int]: ...
+
+
+class PedersenLinearProof:
+    """The stack's existing input check, behind the second seam.
+
+    Binding is discrete log, so it is not post-quantum, and the field the MPC
+    runs in has to hold the group order --- which is section 1 of `BINDING.md`
+    and the reason the alternative is worth measuring at all.
+    """
+
+    name = "pedersen"
+    publicly_verifiable = True
+    post_quantum = False
+
+    def __init__(self, key: Pedersen | None = None, value_bits: int = 32):
+        from .groups import make_group
+        self.scheme = PedersenScheme(key or Pedersen(make_group("ed25519"),
+                                                     b"qomm:pedersen:v1"))
+        self.value_bits = value_bits
+
+    def prove_linear(self, values, context, challenge_bits: int = 40):
+        from . import input_check
+        blindings = [self.scheme.random_blinding() for _ in values]
+        return input_check.build(self.scheme, list(values), blindings, context,
+                                 challenge_bits=challenge_bits,
+                                 value_bits=self.value_bits)
+
+    def verify_linear(self, proof, context, challenge_bits: int = 40):
+        from . import input_check
+        return input_check.verify(self.scheme, proof, context)
+
+    def size_breakdown(self, proof) -> dict[str, int]:
+        point = len(self.scheme.encode(proof.commitments[0]))
+        width = (self.scheme.scalar_modulus.bit_length() + 7) // 8
+        return {
+            "commitments": len(proof.commitments) * point,
+            "mask_commitments": len(proof.mask_commitments) * point,
+            "openings": len(proof.openings) * width,
+            "opening_blindings": len(proof.opening_blindings) * width,
+        }
+
+    def proof_bytes(self, proof) -> int:
+        return sum(self.size_breakdown(proof).values())
+
+
+class VoleInTheHeadLinearProof:
+    """The same statement from a random oracle and nothing else.
+
+    No group, so nothing for the MPC field to match; symmetric primitives only,
+    so post-quantum; and one opening per commitment, which the prover enforces
+    rather than documents.
+    """
+
+    name = "voleith"
+    publicly_verifiable = True
+    post_quantum = True
+
+    DEFAULT_MODULUS = (1 << 127) - 1
+
+    def __init__(self, modulus: int | None = None, depth: int | None = None,
+                 repeats: int | None = None):
+        from . import voleith
+        self._v = voleith
+        self.modulus = modulus or self.DEFAULT_MODULUS
+        self.depth = depth or voleith.DEFAULT_DEPTH
+        self.repeats = repeats or voleith.DEFAULT_REPEATS
+
+    def prove_linear(self, values, context, challenge_bits: int = 40):
+        prover = self._v.Prover(self.modulus, self.depth, self.repeats)
+        root, correction, _ = prover.commit(list(values))
+        coeffs = self._v.coefficients(root, correction, context, self.modulus,
+                                      challenge_bits, len(values))
+        return prover.prove(coeffs, context)
+
+    def verify_linear(self, proof, context, challenge_bits: int = 40):
+        coeffs = self._v.coefficients(proof.root, proof.witness_correction, context,
+                                      self.modulus, challenge_bits, proof.n_values)
+        return self._v.verify(proof, coeffs, context)
+
+    def size_breakdown(self, proof) -> dict[str, int]:
+        return proof.size_breakdown()
+
+    def proof_bytes(self, proof) -> int:
+        return proof.size_bytes()
+
+
+def make_linear_proof(name: str, **kwargs) -> LinearProofScheme:
+    if name == "pedersen":
+        return PedersenLinearProof(**kwargs)
+    if name == "voleith":
+        return VoleInTheHeadLinearProof(**kwargs)
+    raise ValueError(f"unknown linear-proof scheme {name}; "
+                     f"choose from ['pedersen', 'voleith']")
