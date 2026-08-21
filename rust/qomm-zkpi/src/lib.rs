@@ -53,7 +53,8 @@ pub struct Instruction {
     pub asset_commitment: RistrettoPoint,
     /// One aggregated range proof covering amount and price, rather than one
     /// each. Aggregation is the reason to be on Bulletproofs at all.
-    pub ranges: bulletproofs::RangeProof,
+    pub amount_range: bulletproofs::RangeProof,
+    pub price_range: bulletproofs::RangeProof,
     pub range_commitments: Vec<curve25519_dalek::ristretto::CompressedRistretto>,
     pub payer_handle: RistrettoPoint,
     pub payee_handle: RistrettoPoint,
@@ -122,7 +123,12 @@ impl Instruction {
 pub struct Issuer {
     pub key: Pedersen,
     pub bounds: Bounds,
-    pub ranges: RangeCtx,
+    /// One context per field. A single aggregated proof covers both at one
+    /// width, so declaring a 24-bit amount beside a 64-bit price proved the
+    /// amount at 64 and the narrow declaration bought nothing. Two proofs cost
+    /// more than one aggregated pair; buying the width back is what they buy.
+    pub amount_ranges: RangeCtx,
+    pub price_ranges: RangeCtx,
     /// The venue this issuer signs for. Must match the venue's own.
     pub domain: Vec<u8>,
 }
@@ -130,8 +136,11 @@ pub struct Issuer {
 impl Issuer {
     pub fn new(key: Pedersen, bounds: Bounds) -> Self {
         let bits = bounds.amount_bits.max(bounds.price_bits);
-        let ranges = RangeCtx::new(bits, 2);
-        Issuer { domain: DEFAULT_DOMAIN.to_vec(), key, bounds, ranges }
+        let _ = bits;
+        Issuer { domain: DEFAULT_DOMAIN.to_vec(), key,
+                 amount_ranges: RangeCtx::new(bounds.amount_bits, 1),
+                 price_ranges: RangeCtx::new(bounds.price_bits, 1),
+                 bounds }
     }
 
     /// Everything except the signature, which the quorum adds.
@@ -146,14 +155,18 @@ impl Issuer {
             price: Scalar::random(rng),
             asset: Scalar::random(rng),
         };
-        let mut transcript = Transcript::new(b"qomm:zkpi:ranges");
-        let (ranges, range_commitments) = self.ranges.prove(
-            &mut transcript, &[amount, price], &[openings.amount, openings.price])?;
+        let mut transcript = Transcript::new(b"qomm:zkpi:ranges:amount");
+        let (amount_range, amount_commitments) = self.amount_ranges.prove(
+            &mut transcript, &[amount], &[openings.amount])?;
+        let mut transcript = Transcript::new(b"qomm:zkpi:ranges:price");
+        let (price_range, price_commitments) = self.price_ranges.prove(
+            &mut transcript, &[price], &[openings.price])?;
+        let range_commitments = [amount_commitments, price_commitments].concat();
         let partial = PartialInstruction {
             amount_commitment: self.key.commit_u64(amount, &openings.amount),
             price_commitment: self.key.commit_u64(price, &openings.price),
             asset_commitment: self.key.commit_u64(asset as u64, &openings.asset),
-            ranges, range_commitments,
+            amount_range, price_range, range_commitments,
             payer_handle, payee_handle, deadline, nonce, quote_key,
         };
         Ok((partial.digest_for(&self.domain).to_vec(), openings, partial))
@@ -165,7 +178,8 @@ pub struct PartialInstruction {
     pub amount_commitment: RistrettoPoint,
     pub price_commitment: RistrettoPoint,
     pub asset_commitment: RistrettoPoint,
-    pub ranges: bulletproofs::RangeProof,
+    pub amount_range: bulletproofs::RangeProof,
+    pub price_range: bulletproofs::RangeProof,
     pub range_commitments: Vec<curve25519_dalek::ristretto::CompressedRistretto>,
     pub payer_handle: RistrettoPoint,
     pub payee_handle: RistrettoPoint,
@@ -205,7 +219,8 @@ impl PartialInstruction {
             amount_commitment: self.amount_commitment,
             price_commitment: self.price_commitment,
             asset_commitment: self.asset_commitment,
-            ranges: self.ranges,
+            amount_range: self.amount_range,
+            price_range: self.price_range,
             range_commitments: self.range_commitments,
             payer_handle: self.payer_handle,
             payee_handle: self.payee_handle,
@@ -222,16 +237,10 @@ pub struct Venue {
     pub key: Pedersen,
     /// Which venue, chain, rail and protocol version this is. See `digest_for`.
     pub domain: Vec<u8>,
-    pub ranges: RangeCtx,
+    pub amount_ranges: RangeCtx,
+    pub price_ranges: RangeCtx,
     pub group_public: frost::keys::PublicKeyPackage,
     spent: HashSet<[u8; 32]>,
-    /// The two widths, kept apart. `RangeCtx` proves both fields at one width,
-    /// so declaring a 24-bit amount and a 64-bit price let the amount through
-    /// at 64 --- the narrower declaration bought nothing. Until the aggregated
-    /// proof is split in two, the venue refuses the pair rather than accepting
-    /// the wider of them and calling it the narrower.
-    amount_bits: usize,
-    price_bits: usize,
     max_horizon: u64,
 }
 
@@ -239,10 +248,11 @@ impl Venue {
     pub fn new(key: Pedersen, bounds: &Bounds,
                group_public: frost::keys::PublicKeyPackage) -> Self {
         let bits = bounds.amount_bits.max(bounds.price_bits);
+        let _ = bits;
         Venue { key, domain: DEFAULT_DOMAIN.to_vec(),
-                ranges: RangeCtx::new(bits, 2), group_public,
-                spent: HashSet::new(), max_horizon: bounds.max_horizon,
-                amount_bits: bounds.amount_bits, price_bits: bounds.price_bits }
+                amount_ranges: RangeCtx::new(bounds.amount_bits, 1),
+                price_ranges: RangeCtx::new(bounds.price_bits, 1), group_public,
+                spent: HashSet::new(), max_horizon: bounds.max_horizon }
     }
 
     pub fn verify(&self, instruction: &Instruction, now: u64) -> Result<(), &'static str> {
@@ -263,13 +273,17 @@ nullifier for");
             return Err("already settled");
         }
         let mut transcript = Transcript::new(b"qomm:zkpi:ranges");
-        if self.amount_bits != self.price_bits {
-            return Err("this venue declares different widths for amount and price, \
-and one aggregated range proof cannot show two widths");
+        // One proof per field, each at its own declared width, so a narrow
+        // amount beside a wide price is worth what it says.
+        let mut transcript = Transcript::new(b"qomm:zkpi:ranges:amount");
+        if !self.amount_ranges.verify(&mut transcript, &instruction.amount_range,
+                                      &instruction.range_commitments[..1]) {
+            return Err("the amount is outside the published bounds");
         }
-        if !self.ranges.verify(&mut transcript, &instruction.ranges,
-                               &instruction.range_commitments) {
-            return Err("amount or price outside the published bounds");
+        let mut transcript = Transcript::new(b"qomm:zkpi:ranges:price");
+        if !self.price_ranges.verify(&mut transcript, &instruction.price_range,
+                                     &instruction.range_commitments[1..2]) {
+            return Err("the price is outside the published bounds");
         }
         // the commitments the ranges cover must be the ones the instruction
         // carries, or the proof is about something else

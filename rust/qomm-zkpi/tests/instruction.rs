@@ -125,7 +125,8 @@ fn a_range_proof_from_elsewhere_does_not_cover_this_instruction() {
     let q = quorum(&mut rng);
     let (mut instruction, _) = issue(&mut rng, &q, 100, 99_990, 1_500);
     let (other, _) = issue(&mut rng, &q, 5, 7, 1_500);
-    instruction.ranges = other.ranges;
+    instruction.amount_range = other.amount_range;
+    instruction.price_range = other.price_range;
     instruction.range_commitments = other.range_commitments;
     assert!(venue(&q).verify(&instruction, 1_000).is_err());
 }
@@ -180,21 +181,18 @@ fn a_deadline_inside_the_horizon_is_accepted() {
     assert!(venue(&q).verify(&instruction, 1_000).is_ok());
 }
 
-/// Declaring a narrow amount and a wide price bought nothing: one aggregated
-/// range proof covers both fields at one width, so the amount was proved at
-/// the price's width. The venue refuses the pair rather than accepting the
-/// wider and calling it the narrower.
+/// Declaring a narrow amount and a wide price used to buy nothing: one
+/// aggregated proof covered both at one width. Now each field is proved at its
+/// own, and `each_field_is_proved_at_its_own_width` below is what checks it.
+/// This test is what the refusal was, and it is gone.
 #[test]
-fn a_venue_will_not_pretend_one_range_proof_shows_two_widths() {
-    let mut rng = OsRng;
-    let q = quorum(&mut rng);
-    let bounds = Bounds { amount_bits: 24, price_bits: 64, ..Bounds::default() };
-    let (instruction, _) = issue(&mut rng, &q, 100, 99_990, 1_500);
-    let mut mixed = Venue::new(Pedersen::new(b"qomm:zkpi:v1"), &bounds,
-                               q.public.clone());
-    assert_eq!(mixed.verify(&instruction, 1_000),
-               Err("this venue declares different widths for amount and price, \
-and one aggregated range proof cannot show two widths"));
+fn a_width_bulletproofs_does_not_take_is_refused_at_construction() {
+    // The library takes 8, 16, 32 or 64. Asking for anything else is a
+    // programming error and should be one loudly.
+    let result = std::panic::catch_unwind(|| {
+        qomm_zk::range::RangeCtx::new(24, 1)
+    });
+    assert!(result.is_err(), "a width bulletproofs cannot prove was accepted");
 }
 
 /// A payment from a handle to itself moves nothing and burns a nullifier.
@@ -262,4 +260,46 @@ fn a_dkg_quorum_signs_an_instruction_with_no_dealer() {
     let mut venue = Venue::new(Pedersen::new(b"qomm:zkpi:v1"), &Bounds::default(),
                                public);
     assert_eq!(venue.verify(&instruction, 1_000), Ok(()));
+}
+
+
+/// A narrow amount beside a wide price is worth what it says.
+///
+/// One aggregated proof covers both fields at one width, so a 24-bit amount
+/// declared next to a 64-bit price was proved at 64 and the narrow declaration
+/// bought nothing. Two proofs, one per field, buy it back.
+#[test]
+fn each_field_is_proved_at_its_own_width() {
+    let mut rng = OsRng;
+    let q = quorum(&mut rng);
+    let bounds = Bounds { amount_bits: 16, price_bits: 32, ..Bounds::default() };
+    let issuer = Issuer::new(Pedersen::new(b"qomm:zkpi:v1"), bounds.clone());
+
+    // inside 16 bits, and inside 32
+    let (digest, _, partial) = issuer
+        .build(1_000, 99_990, 3,
+               RistrettoPoint::mul_base(&Scalar::from(11u64)),
+               RistrettoPoint::mul_base(&Scalar::from(22u64)),
+               1_500, [7u8; 32], 1_599_845, &mut rng)
+        .unwrap();
+    let instruction = partial.sealed(sign(&q, &digest, 3, &mut rng));
+    let mut venue = Venue::new(Pedersen::new(b"qomm:zkpi:v1"), &bounds, q.public.clone());
+    assert_eq!(venue.verify(&instruction, 1_000), Ok(()));
+
+    // an amount that needs 17 bits: inside the price's width and outside its own
+    let wide = issuer.build(70_000, 99_990, 3,
+                            RistrettoPoint::mul_base(&Scalar::from(11u64)),
+                            RistrettoPoint::mul_base(&Scalar::from(22u64)),
+                            1_500, [8u8; 32], 1_599_845, &mut rng);
+    match wide {
+        Err(_) => {}                       // the prover refuses, which is fine
+        Ok((digest, _, partial)) => {
+            let instruction = partial.sealed(sign(&q, &digest, 3, &mut rng));
+            let mut venue = Venue::new(Pedersen::new(b"qomm:zkpi:v1"), &bounds,
+                                       q.public.clone());
+            assert_eq!(venue.verify(&instruction, 1_000),
+                       Err("the amount is outside the published bounds"),
+                       "an amount past its own width passed at the price's width");
+        }
+    }
 }
