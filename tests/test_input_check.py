@@ -78,8 +78,8 @@ def test_the_coefficients_come_from_the_commitments(key: Pedersen) -> None:
     moved = list(values)
     moved[5] += 1
     second = build(key, moved, blindings, CONTEXT)
-    a = coefficients(key.group, first.commitments, first.mask_commitments[0], CONTEXT)
-    b = coefficients(key.group, second.commitments, second.mask_commitments[0], CONTEXT)
+    a = coefficients(key, first.commitments, first.mask_commitments[0], CONTEXT)
+    b = coefficients(key, second.commitments, second.mask_commitments[0], CONTEXT)
     assert a != b, ("the coefficients did not move with the commitments, so a "
                     "node could choose its error after seeing them")
 
@@ -95,7 +95,7 @@ def test_no_coefficient_is_zero(key: Pedersen) -> None:
     """A zero would leave that input unchecked, which is the quiet failure."""
     values, blindings = policy(key, n=64)
     check = build(key, values, blindings, CONTEXT)
-    c = coefficients(key.group, check.commitments, check.mask_commitments[0], CONTEXT)
+    c = coefficients(key, check.commitments, check.mask_commitments[0], CONTEXT)
     assert len(c) == 64 and all(x > 0 for x in c)
     assert all(x < (1 << CHALLENGE_BITS) for x in c)
 
@@ -211,7 +211,7 @@ def test_every_repetition_uses_different_coefficients(key: Pedersen) -> None:
     """Otherwise repeating buys nothing: the same test four times is one test."""
     values, blindings = policy(key, n=40)
     check = build(key, values, blindings, CONTEXT, repeats=4, **NARROW)
-    rounds = [tuple(coefficients(key.group, check.commitments,
+    rounds = [tuple(coefficients(key, check.commitments,
                                  check.mask_commitments[i], CONTEXT,
                                  NARROW_CHALLENGE_BITS, round_index=i))
               for i in range(4)]
@@ -235,3 +235,59 @@ def test_forty_bit_hiding_is_not_reachable_in_the_narrow_field(key: Pedersen) ->
     # and the peak is at narrow coefficients with many repetitions, not wide ones
     peak = max(curve, key=lambda row: row["hiding_bits"])
     assert peak["challenge_bits"] <= 4 and peak["repeats"] >= 11
+
+
+# ---- the same protocol on a different commitment scheme --------------------
+
+from zk.scheme import CommitmentScheme, VoleScheme, make_scheme   # noqa: E402
+
+
+@pytest.mark.parametrize("name", ("pedersen", "vole"))
+def test_the_check_runs_on_either_scheme(name: str) -> None:
+    """Which is the point of the seam: the protocol does not know which it is on."""
+    scheme = make_scheme(name)
+    values = [(-1) ** i * (37 * i + 5) for i in range(64)]
+    blindings = [scheme.random_blinding() for _ in values]
+    check = build(scheme, values, blindings, CONTEXT, repeats=NARROW_REPEATS, **NARROW)
+    assert verify(scheme, check, CONTEXT) == (True, "ok")
+
+
+@pytest.mark.parametrize("name", ("pedersen", "vole"))
+def test_a_substitution_is_caught_on_either_scheme(name: str) -> None:
+    scheme = make_scheme(name)
+    values = [(-1) ** i * (37 * i + 5) for i in range(64)]
+    blindings = [scheme.random_blinding() for _ in values]
+    honest = build(scheme, values, blindings, CONTEXT, repeats=NARROW_REPEATS, **NARROW)
+    substituted = list(values)
+    substituted[11] += 23
+    lying = build(scheme, substituted, blindings, CONTEXT,
+                  repeats=NARROW_REPEATS, masks=[0] * NARROW_REPEATS, **NARROW)
+    forged = InputCheck(honest.commitments, honest.mask_commitments,
+                        lying.openings, honest.opening_blindings)
+    assert not verify(scheme, forged, CONTEXT)[0]
+
+
+def test_the_two_schemes_do_not_promise_the_same_thing() -> None:
+    """Stated in the interface, so it cannot be forgotten by using it.
+
+    Pedersen commitments are group elements anyone can hold and check, which is
+    what a publicly verifiable quote proof needs. A VOLE commitment is a MAC
+    only the holder of Delta can check, and making it public is what
+    VOLE-in-the-Head does --- at about twice the communication, and not here.
+    """
+    assert make_scheme("pedersen").publicly_verifiable is True
+    assert make_scheme("vole").publicly_verifiable is False
+
+
+def test_the_vole_scheme_binds_and_hides() -> None:
+    scheme = VoleScheme()
+    key = scheme.random_blinding()
+    c = scheme.commit(12345, key)
+    assert scheme.opens(c, 12345, key)
+    assert not scheme.opens(c, 12346, key)
+    # and the homomorphism the protocol above relies on
+    key2 = scheme.random_blinding()
+    d = scheme.commit(678, key2)
+    combined = scheme.add(scheme.scale(c, 7), d)
+    assert scheme.opens(combined, 7 * 12345 + 678,
+                        (7 * key + key2) % scheme.scalar_modulus)

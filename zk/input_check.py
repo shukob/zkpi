@@ -65,6 +65,7 @@ from typing import Any, Sequence
 
 from .commit import Pedersen
 from .groups import DOMAIN, Group
+from .scheme import CommitmentScheme, PedersenScheme
 
 CHALLENGE_BITS = 40
 STATISTICAL_BITS = 40
@@ -179,7 +180,12 @@ def check_width(n_inputs: int, value_bits: int, mpc_prime_bits: int,
     return needed
 
 
-def coefficients(group: Group, commitments: Sequence[Any], mask_commitment: Any,
+def as_scheme(key) -> CommitmentScheme:
+    """Accept either a commitment scheme or the Pedersen key this used to take."""
+    return key if isinstance(key, CommitmentScheme) else PedersenScheme(key)
+
+
+def coefficients(scheme, commitments: Sequence[Any], mask_commitment: Any,
                  context: bytes, challenge_bits: int = CHALLENGE_BITS,
                  round_index: int = 0) -> list[int]:
     """Public coefficients, derived from the commitments and nothing else.
@@ -188,15 +194,16 @@ def coefficients(group: Group, commitments: Sequence[Any], mask_commitment: Any,
     node that wants sum c_j e_j to vanish has to choose e before it can see c,
     and changing e changes nothing about c because c does not depend on e.
     """
+    scheme = as_scheme(scheme)
     seed = hashlib.sha512(DOMAIN + b":input-check:v1")
     seed.update(len(context).to_bytes(4, "big"))
     seed.update(context)
     seed.update(len(commitments).to_bytes(4, "big"))
     for commitment in commitments:
-        encoded = group.encode(commitment)
+        encoded = scheme.encode(commitment)
         seed.update(len(encoded).to_bytes(4, "big"))
         seed.update(encoded)
-    encoded = group.encode(mask_commitment)
+    encoded = scheme.encode(mask_commitment)
     seed.update(len(encoded).to_bytes(4, "big"))
     seed.update(encoded)
     seed.update(round_index.to_bytes(4, "big"))
@@ -241,7 +248,7 @@ def sample_mask(n_inputs: int, value_bits: int,
     return rng.randrange(1 << (combination + statistical_bits))
 
 
-def build(key: Pedersen, values: Sequence[int], blindings: Sequence[int],
+def build(key, values: Sequence[int], blindings: Sequence[int],
           context: bytes, challenge_bits: int = CHALLENGE_BITS,
           statistical_bits: int = STATISTICAL_BITS, repeats: int = 1,
           value_bits: int = 32, masks: Sequence[int] | None = None,
@@ -253,6 +260,7 @@ def build(key: Pedersen, values: Sequence[int], blindings: Sequence[int],
     the opening is the one round this check adds. Here the values are in hand,
     which is what makes the test able to substitute one.
     """
+    scheme = as_scheme(key)
     if len(values) != len(blindings):
         raise ValueError("every value needs its blinding")
     if repeats < 1:
@@ -261,14 +269,14 @@ def build(key: Pedersen, values: Sequence[int], blindings: Sequence[int],
         sample_mask(len(values), value_bits, challenge_bits, statistical_bits)
         for _ in range(repeats)]
     mask_blindings = list(mask_blindings) if mask_blindings is not None else [
-        key.random_blinding() for _ in range(repeats)]
+        scheme.random_blinding() for _ in range(repeats)]
 
-    commitments = [key.commit(v, r) for v, r in zip(values, blindings)]
-    mask_commitments = [key.commit(m, b) for m, b in zip(masks, mask_blindings)]
+    commitments = [scheme.commit(v, r) for v, r in zip(values, blindings)]
+    mask_commitments = [scheme.commit(m, b) for m, b in zip(masks, mask_blindings)]
 
     openings, opening_blindings = [], []
     for index in range(repeats):
-        c = coefficients(key.group, commitments, mask_commitments[index], context,
+        c = coefficients(scheme, commitments, mask_commitments[index], context,
                          challenge_bits, round_index=index)
         openings.append(sum(cj * v for cj, v in zip(c, values)) + masks[index])
         opening_blindings.append(
@@ -277,20 +285,20 @@ def build(key: Pedersen, values: Sequence[int], blindings: Sequence[int],
                       challenge_bits)
 
 
-def verify(key: Pedersen, check: InputCheck, context: bytes) -> tuple[bool, str]:
+def verify(key, check: InputCheck, context: bytes) -> tuple[bool, str]:
     """Anyone's side: rederive the coefficients and combine the commitments."""
-    group = key.group
+    scheme = as_scheme(key)
     if not check.commitments:
         return False, "the check covers no inputs"
     for index in range(check.repeats):
-        c = coefficients(group, check.commitments, check.mask_commitments[index],
+        c = coefficients(scheme, check.commitments, check.mask_commitments[index],
                          context, check.challenge_bits, round_index=index)
         combined = check.mask_commitments[index]
         for coefficient, commitment in zip(c, check.commitments):
-            combined = group.mul(combined, group.point_pow(commitment, coefficient))
-        if group.encode(key.commit(check.openings[index],
-                                   check.opening_blindings[index])) != \
-                group.encode(combined):
+            combined = scheme.add(combined, scheme.scale(commitment, coefficient))
+        if not scheme.equal(scheme.commit(check.openings[index],
+                                          check.opening_blindings[index]),
+                            combined):
             return False, (f"combination {index} is not what the committed inputs "
                            f"combine to: an input the circuit used was not the "
                            f"one that was committed")
