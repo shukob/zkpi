@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import pytest
 
+# what the circuit opens once every input has been read
+BEACON = 0x9E3779B97F4A7C15
+
 from zk.commit import Pedersen
 from zk.groups import make_group
 from zk.input_check import (CHALLENGE_BITS, NARROW_CHALLENGE_BITS,
@@ -34,8 +37,8 @@ def policy(key: Pedersen, n: int = 24) -> tuple[list[int], list[int]]:
 
 def test_honest_inputs_verify(key: Pedersen) -> None:
     values, blindings = policy(key)
-    check = build(key, values, blindings, CONTEXT)
-    assert verify(key, check, CONTEXT) == (True, "ok")
+    check = build(key, values, blindings, CONTEXT, BEACON)
+    assert verify(key, check, CONTEXT, BEACON) == (True, "ok")
 
 
 @pytest.mark.parametrize("position", (0, 7, 23))
@@ -44,58 +47,65 @@ def test_one_substituted_input_is_caught(key: Pedersen, position: int,
                                          error: int) -> None:
     """A node feeds the circuit something other than the share it was dealt."""
     values, blindings = policy(key)
-    honest = build(key, values, blindings, CONTEXT)
+    honest = build(key, values, blindings, CONTEXT, BEACON)
 
     # the commitments stand --- the dealer published them --- but the circuit
     # ran on a different value, so the opening is the shifted one
     substituted = list(values)
     substituted[position] += error
-    lying = build(key, substituted, blindings, CONTEXT)
+    lying = build(key, substituted, blindings, CONTEXT, BEACON)
     forged = InputCheck(honest.commitments, honest.mask_commitments,
                         lying.openings, honest.opening_blindings)
 
-    ok, reason = verify(key, forged, CONTEXT)
+    ok, reason = verify(key, forged, CONTEXT, BEACON)
     assert not ok and "was not the one that was committed" in reason
 
 
 def test_errors_across_two_inputs_do_not_cancel(key: Pedersen) -> None:
     """The obvious way to try to survive: shift one input up and another down."""
     values, blindings = policy(key)
-    honest = build(key, values, blindings, CONTEXT)
+    honest = build(key, values, blindings, CONTEXT, BEACON)
     substituted = list(values)
     substituted[3] += 500
     substituted[11] -= 500          # cancels only if c_3 happens to equal c_11
-    lying = build(key, substituted, blindings, CONTEXT)
+    lying = build(key, substituted, blindings, CONTEXT, BEACON)
     forged = InputCheck(honest.commitments, honest.mask_commitments,
                         lying.openings, honest.opening_blindings)
-    assert not verify(key, forged, CONTEXT)[0]
+    assert not verify(key, forged, CONTEXT, BEACON)[0]
 
 
 def test_the_coefficients_come_from_the_commitments(key: Pedersen) -> None:
-    """Which is what puts them after the inputs rather than before."""
+    """They depend on the commitments --- necessary, and it was never sufficient.
+
+    An earlier docstring here said this "puts them after the inputs". It does
+    not: the commitments are published at dealing time and a node feeds the
+    circuit later. What puts them after the inputs is the challenge, which is
+    the other argument. See `tests/test_per_party_check.py` for the attack that
+    is possible without it.
+    """
     values, blindings = policy(key)
-    first = build(key, values, blindings, CONTEXT)
+    first = build(key, values, blindings, CONTEXT, BEACON)
     moved = list(values)
     moved[5] += 1
-    second = build(key, moved, blindings, CONTEXT)
-    a = coefficients(key, first.commitments, first.mask_commitments[0], CONTEXT)
-    b = coefficients(key, second.commitments, second.mask_commitments[0], CONTEXT)
+    second = build(key, moved, blindings, CONTEXT, BEACON)
+    a = coefficients(key, first.commitments, first.mask_commitments[0], CONTEXT, BEACON)
+    b = coefficients(key, second.commitments, second.mask_commitments[0], CONTEXT, BEACON)
     assert a != b, ("the coefficients did not move with the commitments, so a "
                     "node could choose its error after seeing them")
 
 
 def test_the_context_separates_slots(key: Pedersen) -> None:
     values, blindings = policy(key)
-    check = build(key, values, blindings, CONTEXT)
-    assert verify(key, check, CONTEXT)[0]
-    assert not verify(key, check, b"qomm:test:slot:8")[0]
+    check = build(key, values, blindings, CONTEXT, BEACON)
+    assert verify(key, check, CONTEXT, BEACON)[0]
+    assert not verify(key, check, b"qomm:test:slot:8", BEACON)[0]
 
 
 def test_no_coefficient_is_zero(key: Pedersen) -> None:
     """A zero would leave that input unchecked, which is the quiet failure."""
     values, blindings = policy(key, n=64)
-    check = build(key, values, blindings, CONTEXT)
-    c = coefficients(key, check.commitments, check.mask_commitments[0], CONTEXT)
+    check = build(key, values, blindings, CONTEXT, BEACON)
+    c = coefficients(key, check.commitments, check.mask_commitments[0], CONTEXT, BEACON)
     assert len(c) == 64 and all(x > 0 for x in c)
     assert all(x < (1 << CHALLENGE_BITS) for x in c)
 
@@ -103,7 +113,7 @@ def test_no_coefficient_is_zero(key: Pedersen) -> None:
 def test_the_mask_moves_the_opening(key: Pedersen) -> None:
     """Same policy twice: the openings must not be the same number."""
     values, blindings = policy(key)
-    openings = {build(key, values, blindings, CONTEXT).openings[0] for _ in range(8)}
+    openings = {build(key, values, blindings, CONTEXT, BEACON).openings[0] for _ in range(8)}
     assert len(openings) == 8, ("the opening repeated, so a policy priced twice "
                                 "would leak the same equation twice")
 
@@ -163,7 +173,7 @@ def test_the_number_of_inputs_is_almost_free(key: Pedersen) -> None:
 def test_the_opening_stays_inside_the_narrower_field(key: Pedersen) -> None:
     """Not just the bound --- the number an honest run actually produces."""
     values, blindings = policy(key, n=166)
-    check = build(key, values, blindings, CONTEXT)
+    check = build(key, values, blindings, CONTEXT, BEACON)
     assert all(0 < o < (1 << opening_bits(166, 31)) for o in check.openings)
     assert all(o < (1 << 127) for o in check.openings), \
         "the opening would reduce in the MPC prime"
@@ -185,34 +195,34 @@ def test_the_narrow_configuration_fits_the_default_field(key: Pedersen) -> None:
 
 def test_repetition_buys_the_soundness_back(key: Pedersen) -> None:
     values, blindings = policy(key, n=166)
-    check = build(key, values, blindings, CONTEXT, repeats=NARROW_REPEATS, **NARROW)
+    check = build(key, values, blindings, CONTEXT, BEACON, repeats=NARROW_REPEATS, **NARROW)
     assert check.repeats == 7
     assert check.soundness_bits() == 42, (
         "seven six-bit combinations should clear the 2^-40 the rest of the "
         "stack uses")
-    assert verify(key, check, CONTEXT) == (True, "ok")
+    assert verify(key, check, CONTEXT, BEACON) == (True, "ok")
 
 
 @pytest.mark.parametrize("position", (0, 83, 165))
 def test_the_narrow_check_still_catches_a_substitution(key: Pedersen,
                                                        position: int) -> None:
     values, blindings = policy(key, n=166)
-    honest = build(key, values, blindings, CONTEXT, repeats=NARROW_REPEATS, **NARROW)
+    honest = build(key, values, blindings, CONTEXT, BEACON, repeats=NARROW_REPEATS, **NARROW)
     substituted = list(values)
     substituted[position] += 17
-    lying = build(key, substituted, blindings, CONTEXT, repeats=NARROW_REPEATS,
+    lying = build(key, substituted, blindings, CONTEXT, BEACON, repeats=NARROW_REPEATS,
                   masks=[0] * NARROW_REPEATS, **NARROW)
     forged = InputCheck(honest.commitments, honest.mask_commitments,
                         lying.openings, honest.opening_blindings)
-    assert not verify(key, forged, CONTEXT)[0]
+    assert not verify(key, forged, CONTEXT, BEACON)[0]
 
 
 def test_every_repetition_uses_different_coefficients(key: Pedersen) -> None:
     """Otherwise repeating buys nothing: the same test four times is one test."""
     values, blindings = policy(key, n=40)
-    check = build(key, values, blindings, CONTEXT, repeats=4, **NARROW)
+    check = build(key, values, blindings, CONTEXT, BEACON, repeats=4, **NARROW)
     rounds = [tuple(coefficients(key, check.commitments,
-                                 check.mask_commitments[i], CONTEXT,
+                                 check.mask_commitments[i], CONTEXT, BEACON,
                                  NARROW_CHALLENGE_BITS, round_index=i))
               for i in range(4)]
     assert len(set(rounds)) == 4
@@ -248,8 +258,8 @@ def test_the_check_runs_on_either_scheme(name: str) -> None:
     scheme = make_scheme(name)
     values = [(-1) ** i * (37 * i + 5) for i in range(64)]
     blindings = [scheme.random_blinding() for _ in values]
-    check = build(scheme, values, blindings, CONTEXT, repeats=NARROW_REPEATS, **NARROW)
-    assert verify(scheme, check, CONTEXT) == (True, "ok")
+    check = build(scheme, values, blindings, CONTEXT, BEACON, repeats=NARROW_REPEATS, **NARROW)
+    assert verify(scheme, check, CONTEXT, BEACON) == (True, "ok")
 
 
 @pytest.mark.parametrize("name", ("pedersen", "vole"))
@@ -257,14 +267,14 @@ def test_a_substitution_is_caught_on_either_scheme(name: str) -> None:
     scheme = make_scheme(name)
     values = [(-1) ** i * (37 * i + 5) for i in range(64)]
     blindings = [scheme.random_blinding() for _ in values]
-    honest = build(scheme, values, blindings, CONTEXT, repeats=NARROW_REPEATS, **NARROW)
+    honest = build(scheme, values, blindings, CONTEXT, BEACON, repeats=NARROW_REPEATS, **NARROW)
     substituted = list(values)
     substituted[11] += 23
-    lying = build(scheme, substituted, blindings, CONTEXT,
+    lying = build(scheme, substituted, blindings, CONTEXT, BEACON,
                   repeats=NARROW_REPEATS, masks=[0] * NARROW_REPEATS, **NARROW)
     forged = InputCheck(honest.commitments, honest.mask_commitments,
                         lying.openings, honest.opening_blindings)
-    assert not verify(scheme, forged, CONTEXT)[0]
+    assert not verify(scheme, forged, CONTEXT, BEACON)[0]
 
 
 def test_the_two_schemes_do_not_promise_the_same_thing() -> None:

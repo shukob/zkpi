@@ -11,17 +11,25 @@ seven to fourteen times the traffic, on every quote, forever
 (`artifacts/matched_field.json`). This costs one opening.
 
 The check is one random linear combination. The dealer has already published a
-commitment per input. Once the inputs are fixed, public coefficients are derived
-from those commitments, the circuit computes
+commitment per input. **The coefficients are derived from a challenge drawn
+after the circuit has read its inputs**, not from the commitments alone --- the
+first version derived them from the commitments, which are published at dealing
+time, so a node saw them before it fed the engine and could pick an error in
+their null space: feed `x_1 + c_2 k` and `x_2 - c_1 k` and the combination
+vanishes identically. That is `artifacts/coefficient_timing_flaw.json`, and it
+was found by writing the proof rather than by any of the tests, all of which
+substituted a single input --- where the equation does force `e = 0`.
+
+With the challenge drawn afterwards, the circuit computes
 
     s = sum_j c_j v_j + r
 
 for a mask r the dealer also committed to, and opens s. Pedersen commitments are
 additively homomorphic, so the same coefficients combine the commitments into one
-that s must open. A node that feeds the circuit v_j + e_j instead of v_j shifts s
-by sum_j c_j e_j, and for that to vanish the coefficients would have to satisfy
-an equation the substituting node could not see when it chose e --- so it passes
-with probability about 2^-CHALLENGE_BITS.
+that s must open. A node that feeds the circuit v_j + e_j instead of v_j shifts s by
+sum_j c_j e_j, and for that to vanish the node would have to have chosen e
+knowing coefficients that did not exist yet --- so it passes with probability
+about 2^-CHALLENGE_BITS.
 
 Two things this rests on, both checked rather than assumed.
 
@@ -186,14 +194,23 @@ def as_scheme(key) -> CommitmentScheme:
 
 
 def coefficients(scheme, commitments: Sequence[Any], mask_commitment: Any,
-                 context: bytes, challenge_bits: int = CHALLENGE_BITS,
+                 context: bytes, challenge: int | None = None,
+                 challenge_bits: int = CHALLENGE_BITS,
                  round_index: int = 0) -> list[int]:
-    """Public coefficients, derived from the commitments and nothing else.
+    """Public coefficients, from the commitments AND a post-input challenge.
 
-    Deriving them from the commitments is what puts them after the inputs: a
-    node that wants sum c_j e_j to vanish has to choose e before it can see c,
-    and changing e changes nothing about c because c does not depend on e.
+    `challenge` is a value opened once every input has been read --- in
+    deployment, one random opening inside the circuit. Without it the
+    coefficients exist before the node fixes its input, and a node that can see
+    them chooses an error in their null space. There is no default, because a
+    caller that forgets is not slightly weaker; it has no check at all.
     """
+    if challenge is None:
+        raise ValueError(
+            "the coefficients need a challenge drawn AFTER the inputs are "
+            "fixed. Deriving them from the commitments alone lets a node that "
+            "has seen them feed x_1 + c_2*k and x_2 - c_1*k, which cancels "
+            "identically --- see artifacts/coefficient_timing_flaw.json")
     scheme = as_scheme(scheme)
     seed = hashlib.sha512(DOMAIN + b":input-check:v1")
     seed.update(len(context).to_bytes(4, "big"))
@@ -207,6 +224,7 @@ def coefficients(scheme, commitments: Sequence[Any], mask_commitment: Any,
     seed.update(len(encoded).to_bytes(4, "big"))
     seed.update(encoded)
     seed.update(round_index.to_bytes(4, "big"))
+    seed.update(int(challenge).to_bytes(32, "big", signed=False))
     root = seed.digest()
 
     out, span = [], 1 << challenge_bits
@@ -249,7 +267,8 @@ def sample_mask(n_inputs: int, value_bits: int,
 
 
 def build(key, values: Sequence[int], blindings: Sequence[int],
-          context: bytes, challenge_bits: int = CHALLENGE_BITS,
+          context: bytes, challenge: int | None = None,
+          challenge_bits: int = CHALLENGE_BITS,
           statistical_bits: int = STATISTICAL_BITS, repeats: int = 1,
           value_bits: int = 32, masks: Sequence[int] | None = None,
           mask_blindings: Sequence[int] | None = None) -> InputCheck:
@@ -277,7 +296,7 @@ def build(key, values: Sequence[int], blindings: Sequence[int],
     openings, opening_blindings = [], []
     for index in range(repeats):
         c = coefficients(scheme, commitments, mask_commitments[index], context,
-                         challenge_bits, round_index=index)
+                         challenge, challenge_bits, round_index=index)
         openings.append(sum(cj * v for cj, v in zip(c, values)) + masks[index])
         opening_blindings.append(
             sum(cj * r for cj, r in zip(c, blindings)) + mask_blindings[index])
@@ -285,14 +304,16 @@ def build(key, values: Sequence[int], blindings: Sequence[int],
                       challenge_bits)
 
 
-def verify(key, check: InputCheck, context: bytes) -> tuple[bool, str]:
+def verify(key, check: InputCheck, context: bytes,
+           challenge: int | None = None) -> tuple[bool, str]:
     """Anyone's side: rederive the coefficients and combine the commitments."""
     scheme = as_scheme(key)
     if not check.commitments:
         return False, "the check covers no inputs"
     for index in range(check.repeats):
         c = coefficients(scheme, check.commitments, check.mask_commitments[index],
-                         context, check.challenge_bits, round_index=index)
+                         context, challenge, check.challenge_bits,
+                         round_index=index)
         combined = check.mask_commitments[index]
         for coefficient, commitment in zip(c, check.commitments):
             combined = scheme.add(combined, scheme.scale(commitment, coefficient))
@@ -379,10 +400,39 @@ def per_party_field_bits(n_inputs: int, value_bits: int, n_nodes: int = 7,
     return combination + statistical_bits + 1
 
 
+def powers(challenge: int, count: int, modulus: int) -> list[int]:
+    """`rho, rho^2, ... rho^count` mod p --- what the circuit multiplies by.
+
+    Powers rather than independent hashes because the circuit has to compute
+    them too, and a running product on a public field element is free while a
+    hash is not. The bound follows from the shape: `sum_k rho^k e_k + e_m = 0`
+    is a polynomial of degree `count` in `rho`, so a fixed non-zero error
+    survives with probability at most `count / p` --- about `2^-245` at 166
+    values and a 253-bit field, against `2^-42` for the seven narrow
+    repetitions the integer version needed.
+    """
+    if challenge is None:
+        raise ValueError(
+            "the coefficients need a challenge drawn AFTER the inputs are "
+            "fixed --- see artifacts/coefficient_timing_flaw.json")
+    out, c = [], 1
+    for _ in range(count):
+        c = (c * challenge) % modulus
+        out.append(c)
+    return out
+
+
 def per_party_coefficients(scheme, share_commitments, mask_commitments,
-                           context: bytes,
+                           context: bytes, challenge: int | None = None,
                            challenge_bits: int = CHALLENGE_BITS) -> list[int]:
-    """Public coefficients over every published commitment, in a fixed order."""
+    """Every published commitment, in a fixed order, plus the post-input challenge.
+
+    See `coefficients` for why the challenge is not optional.
+    """
+    if challenge is None:
+        raise ValueError(
+            "the coefficients need a challenge drawn AFTER the inputs are "
+            "fixed --- see artifacts/coefficient_timing_flaw.json")
     scheme = as_scheme(scheme)
     seed = hashlib.sha512(DOMAIN + b":per-party-check:v1")
     seed.update(len(context).to_bytes(4, "big"))
@@ -398,6 +448,7 @@ def per_party_coefficients(scheme, share_commitments, mask_commitments,
         encoded = scheme.encode(commitment)
         seed.update(len(encoded).to_bytes(4, "big"))
         seed.update(encoded)
+    seed.update(int(challenge).to_bytes(32, "big", signed=False))
     root = seed.digest()
 
     n_values = len(share_commitments[0]) if share_commitments else 0
@@ -409,6 +460,7 @@ def per_party_coefficients(scheme, share_commitments, mask_commitments,
 
 
 def build_per_party(key, shares, blindings, context: bytes,
+                    challenge: int | None = None,
                     challenge_bits: int = CHALLENGE_BITS,
                     statistical_bits: int = STATISTICAL_BITS,
                     share_bits: int = 71, masks=None,
@@ -436,7 +488,7 @@ def build_per_party(key, shares, blindings, context: bytes,
     mask_commitments = [scheme.commit(m, b)
                         for m, b in zip(masks, mask_blindings)]
     coefficients_ = per_party_coefficients(scheme, share_commitments,
-                                           mask_commitments, context,
+                                           mask_commitments, context, challenge,
                                            challenge_bits)
     openings, opening_blindings = [], []
     for party, row in enumerate(shares):
@@ -449,8 +501,8 @@ def build_per_party(key, shares, blindings, context: bytes,
                          opening_blindings, challenge_bits)
 
 
-def verify_per_party(key, check: PerPartyCheck,
-                     context: bytes) -> tuple[bool, str, list[int]]:
+def verify_per_party(key, check: PerPartyCheck, context: bytes,
+                     challenge: int | None = None) -> tuple[bool, str, list[int]]:
     """Anyone's side. Returns the parties whose inputs were not the committed ones.
 
     The third element is the difference from `verify`: a list of indices rather
@@ -461,7 +513,7 @@ def verify_per_party(key, check: PerPartyCheck,
         return False, "the check covers no parties", []
     coefficients_ = per_party_coefficients(scheme, check.share_commitments,
                                            check.mask_commitments, context,
-                                           check.challenge_bits)
+                                           challenge, check.challenge_bits)
     culprits = []
     for party in range(check.n_parties):
         combined = check.mask_commitments[party]

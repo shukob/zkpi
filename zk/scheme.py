@@ -283,16 +283,22 @@ class PedersenLinearProof:
                                                      b"qomm:pedersen:v1"))
         self.value_bits = value_bits
 
+    # The challenge stands in for the value a deployment opens once every input
+    # has been read. It is not optional and it is not derivable from the
+    # commitments --- `artifacts/coefficient_timing_flaw.json` is what happens
+    # when it is.
+    CHALLENGE = 0x9E3779B97F4A7C15
+
     def prove_linear(self, values, context, challenge_bits: int = 40):
         from . import input_check
         blindings = [self.scheme.random_blinding() for _ in values]
         return input_check.build(self.scheme, list(values), blindings, context,
-                                 challenge_bits=challenge_bits,
+                                 self.CHALLENGE, challenge_bits=challenge_bits,
                                  value_bits=self.value_bits)
 
     def verify_linear(self, proof, context, challenge_bits: int = 40):
         from . import input_check
-        return input_check.verify(self.scheme, proof, context)
+        return input_check.verify(self.scheme, proof, context, self.CHALLENGE)
 
     def size_breakdown(self, proof) -> dict[str, int]:
         point = len(self.scheme.encode(proof.commitments[0]))
