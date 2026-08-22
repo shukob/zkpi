@@ -303,3 +303,177 @@ def verify(key, check: InputCheck, context: bytes) -> tuple[bool, str]:
                            f"combine to: an input the circuit used was not the "
                            f"one that was committed")
     return True, "ok"
+
+
+# --- naming the party, not just detecting the substitution -----------------
+#
+# Everything above proves that *an* input the circuit used was not the one that
+# was committed. It does not say which node did it, and
+# `ACCOUNTABILITY.md` is about how much difference that makes: detection is the
+# first of five rungs and a verdict is the fourth.
+#
+# The step from one to the other is smaller than it looks, because **the dealer
+# already publishes what it needs**. `qomm_transport.roles.Dealing` carries a
+# commitment to every share --- that is what makes `check_share` possible for a
+# node and `adds_up` possible for anyone --- and those are exactly the
+# commitments this combines. The marginal cost is the openings.
+#
+# Today the circuit opens one combination over the reconstructed values:
+#
+#     s = sum_j c_j v_j + m          where v_j = sum_p x_{p,j}
+#
+# Instead open one per party, over that party's own inputs:
+#
+#     s_p = sum_j c_j x_{p,j} + m_p
+#
+# and check each against `sum_j c_j C_{p,j} + C_{m_p}`. A party whose check
+# fails is named, by anyone, from published data. `sum_p s_p` is the old check
+# with the old mask, so this is strictly stronger and not an alternative.
+#
+# The soundness argument is unchanged and applies per party: the coefficients
+# come from the commitments, so a node has to choose its error before it can see
+# the coefficient that would cancel it.
+#
+# **This names. It does not prevent, and it does not repair.** By the time the
+# opening is checked the circuit has already computed on the wrong input. That
+# is rung four and not rung five.
+
+
+@dataclass(frozen=True)
+class PerPartyCheck:
+    """One opening per party, so a failing check has a name attached."""
+
+    share_commitments: list           # [party][value]
+    mask_commitments: list            # one per party
+    openings: list                    # one per party
+    opening_blindings: list
+    challenge_bits: int = CHALLENGE_BITS
+
+    @property
+    def n_parties(self) -> int:
+        return len(self.openings)
+
+    @property
+    def n_values(self) -> int:
+        return len(self.share_commitments[0]) if self.share_commitments else 0
+
+    def soundness_bits(self) -> int:
+        return self.challenge_bits
+
+
+def per_party_field_bits(n_inputs: int, value_bits: int, n_nodes: int = 7,
+                         challenge_bits: int = CHALLENGE_BITS,
+                         statistical_bits: int = STATISTICAL_BITS,
+                         share_slack: int = 40) -> int:
+    """What the per-party check needs from the field.
+
+    Wider than the aggregate check in one place and narrower in another, and the
+    second wins. Party `p` combines *shares*, which are `value_bits +
+    share_slack` wide rather than `value_bits`, so the combination is wider. But
+    the mask is that party's own input and is **not dealt across nodes**, so it
+    does not pay the `share_slack + log2(n_nodes)` that the aggregate check's
+    mask pays --- and that is the term which forced 164 bits.
+    """
+    share_bits = value_bits + share_slack
+    combination = share_bits + challenge_bits + max(0, (n_inputs - 1).bit_length())
+    return combination + statistical_bits + 1
+
+
+def per_party_coefficients(scheme, share_commitments, mask_commitments,
+                           context: bytes,
+                           challenge_bits: int = CHALLENGE_BITS) -> list[int]:
+    """Public coefficients over every published commitment, in a fixed order."""
+    scheme = as_scheme(scheme)
+    seed = hashlib.sha512(DOMAIN + b":per-party-check:v1")
+    seed.update(len(context).to_bytes(4, "big"))
+    seed.update(context)
+    seed.update(len(share_commitments).to_bytes(4, "big"))
+    for row in share_commitments:
+        seed.update(len(row).to_bytes(4, "big"))
+        for commitment in row:
+            encoded = scheme.encode(commitment)
+            seed.update(len(encoded).to_bytes(4, "big"))
+            seed.update(encoded)
+    for commitment in mask_commitments:
+        encoded = scheme.encode(commitment)
+        seed.update(len(encoded).to_bytes(4, "big"))
+        seed.update(encoded)
+    root = seed.digest()
+
+    n_values = len(share_commitments[0]) if share_commitments else 0
+    out, span = [], 1 << challenge_bits
+    for index in range(n_values):
+        digest = hashlib.sha512(root + index.to_bytes(4, "big")).digest()
+        out.append(1 + int.from_bytes(digest, "big") % (span - 1))
+    return out
+
+
+def build_per_party(key, shares, blindings, context: bytes,
+                    challenge_bits: int = CHALLENGE_BITS,
+                    statistical_bits: int = STATISTICAL_BITS,
+                    share_bits: int = 71, masks=None,
+                    mask_blindings=None) -> PerPartyCheck:
+    """The dealer's side. `shares[p][j]` is party `p`'s share of value `j`."""
+    scheme = as_scheme(key)
+    if not shares:
+        raise ValueError("a check over no parties checks nothing")
+    n_values = len(shares[0])
+    if any(len(row) != n_values for row in shares):
+        raise ValueError("every party holds one share of every value")
+    if len(blindings) != len(shares) or any(
+            len(b) != n_values for b in blindings):
+        raise ValueError("every share needs its blinding")
+
+    rng = secrets.SystemRandom()
+    width = share_bits + challenge_bits + max(0, (n_values - 1).bit_length())
+    masks = list(masks) if masks is not None else [
+        rng.randrange(1 << (width + statistical_bits)) for _ in shares]
+    mask_blindings = list(mask_blindings) if mask_blindings is not None else [
+        scheme.random_blinding() for _ in shares]
+
+    share_commitments = [[scheme.commit(v, r) for v, r in zip(row, brow)]
+                         for row, brow in zip(shares, blindings)]
+    mask_commitments = [scheme.commit(m, b)
+                        for m, b in zip(masks, mask_blindings)]
+    coefficients_ = per_party_coefficients(scheme, share_commitments,
+                                           mask_commitments, context,
+                                           challenge_bits)
+    openings, opening_blindings = [], []
+    for party, row in enumerate(shares):
+        openings.append(sum(c * v for c, v in zip(coefficients_, row))
+                        + masks[party])
+        opening_blindings.append(
+            sum(c * r for c, r in zip(coefficients_, blindings[party]))
+            + mask_blindings[party])
+    return PerPartyCheck(share_commitments, mask_commitments, openings,
+                         opening_blindings, challenge_bits)
+
+
+def verify_per_party(key, check: PerPartyCheck,
+                     context: bytes) -> tuple[bool, str, list[int]]:
+    """Anyone's side. Returns the parties whose inputs were not the committed ones.
+
+    The third element is the difference from `verify`: a list of indices rather
+    than a sentence about somebody.
+    """
+    scheme = as_scheme(key)
+    if not check.share_commitments:
+        return False, "the check covers no parties", []
+    coefficients_ = per_party_coefficients(scheme, check.share_commitments,
+                                           check.mask_commitments, context,
+                                           check.challenge_bits)
+    culprits = []
+    for party in range(check.n_parties):
+        combined = check.mask_commitments[party]
+        for coefficient, commitment in zip(coefficients_,
+                                           check.share_commitments[party]):
+            combined = scheme.add(combined, scheme.scale(commitment, coefficient))
+        if not scheme.equal(scheme.commit(check.openings[party],
+                                          check.opening_blindings[party]),
+                            combined):
+            culprits.append(party)
+    if not culprits:
+        return True, "ok", []
+    named = ", ".join(f"node {p}" for p in culprits)
+    return False, (f"the inputs {named} fed the circuit were not the ones "
+                   f"committed to {'it' if len(culprits) == 1 else 'them'}"), culprits
