@@ -30,7 +30,13 @@
       "bytes": 9687,
       "host": "host-c",
       "sha256": "d21e3a7aa980291e399d05d3e8f050d25878ead7d93f568144849ad92096deba"
+    },
+    "zkpi_wire.json": {
+      "bytes": 1128,
+      "host": "host-c",
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "sha256": "2c33d8c69297d0e0f4647224277b3c545fefad6cc9b5a9bde19cb91fe4b2f5a6"
     }
   },
-  "commit": "ff11c2129ed75cadd78310d23819c9768311443e"
+  "commit": "efa4bb9a62b2362c6aa292c6f7fda57c0e72055d"
 }

@@ -12,6 +12,8 @@
 //! audit behind it; there was no reason to keep a hand-rolled one.
 
 pub mod handles;
+pub mod wire;
+pub mod wire_vectors;
 
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;

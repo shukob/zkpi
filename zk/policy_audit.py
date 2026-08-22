@@ -14,12 +14,17 @@ the policy the MPC actually evaluated. Both are handled here.
                       policy is attributable to a legal entity without the
                       policy or the entity becoming public
 
-What is deliberately not claimed: these shares are not the shares MP-SPDZ
-consumes. MP-SPDZ works over its own prime field, so an end-to-end binding needs
-the computation to run over the same field as the commitments (MP-SPDZ accepts a
-custom prime, which is the intended integration route) or a commit-and-prove
-link between the two. Until that is wired up, this module establishes the
-mechanism and its cost, not a deployed guarantee.
+These used not to be the shares MP-SPDZ consumes, and that was the gap
+`BINDING.md` opens with: the circuit read additive shares over the integers
+while this committed to Shamir shares over the group's scalar field, so a maker
+could have one policy audited and a different one computed. **`zk/binding.py`
+closes it**, by the only route that needs no new cryptography --- the same call
+commits and deals, and the MPC runs over the field a share is an element of, so
+the two sharings are one sharing rather than two that agree. Measured at 1.00x
+rounds and 2.00x traffic, and run end to end in `scripts/run_binding_chain.py`.
+
+What this module still is on its own: the range proofs and the KYB binding. Use
+`BindingDealer` for anything that has to reach the circuit.
 """
 
 from __future__ import annotations

@@ -15,4 +15,13 @@ frost-ristretto255.workspace = true
 frost-core.workspace = true
 
 [dev-dependencies]
+qomm-measure.workspace = true
 rand = "0.8"
+
+[[bin]]
+name = "qomm-zkpi-verify"
+path = "src/bin/verify.rs"
+
+[[bench]]
+name = "wire"
+harness = false

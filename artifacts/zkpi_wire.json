@@ -1,0 +1,14 @@
+{
+  "host": "host-c",
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "wire_bytes": 1572,
+  "encode_us": {"n": 200, "mean": 22.628525, "sd": 1.243238, "median": 22.208000, "min": 21.833000, "max": 27.833000, "rsd": 0.054941},
+  "decode_us": {"n": 200, "mean": 28.190690, "sd": 2.750386, "median": 27.812500, "min": 25.125000, "max": 46.667000, "rsd": 0.097564},
+  "verify_us": {"n": 50, "mean": 1620.534940, "sd": 65.427203, "median": 1609.479000, "min": 1545.333000, "max": 1815.041000, "rsd": 0.040374},
+  "off_the_wire_us": {"n": 50, "mean": 1650.218280, "sd": 67.586767, "median": 1637.604500, "min": 1564.625000, "max": 1870.708000, "rsd": 0.040956},
+  "as_precompile_gas": 109174,
+  "in_evm_scalar_mul_gas": 302401,
+  "ratio_against_one_scalar_mult": 2.8,
+  "pricing": "ecrecover at 3000 gas for about 45 us of secp256k1, the closest reference point an EVM chain has",
+  "deployment_requirement": "a chain that permits adding a curve as a precompile. Ethereum L1 does not --- its precompiles are fixed by consensus. An Avalanche L1 does, because Subnet-EVM takes stateful precompiles as a build-time configuration."
+}

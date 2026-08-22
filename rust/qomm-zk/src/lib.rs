@@ -11,6 +11,7 @@ pub mod pedersen;
 pub mod oneofmany;
 pub mod or_dleq;
 pub mod range;
+pub mod shamir;
 pub mod sigma;
 
 pub use pedersen::{asset_tag, encode, Pedersen};

@@ -114,6 +114,7 @@ this copy does.
 
 - [`POSITION.md`](POSITION.md) --- what is new here and what is not, stated line by line against the nearest prior work
 - [`ACCOUNTABILITY.md`](ACCOUNTABILITY.md) --- what happens when a node misbehaves: the five rungs from abort to guaranteed output delivery, and which one each mechanism here reaches
+- [`ZKPI_WIRE.md`](ZKPI_WIRE.md) --- the bytes an instruction travels as, the vectors to check an implementation against, and where it can run
 
 ## Running it
 
