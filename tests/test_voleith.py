@@ -353,3 +353,43 @@ def test_only_one_of_the_two_is_post_quantum():
 def test_an_unknown_scheme_names_the_ones_that_exist():
     with pytest.raises(ValueError, match="pedersen"):
         make_linear_proof("groth16")
+
+
+# --- what a general linear code would and would not buy ---------------------
+
+def test_the_code_swap_alone_still_reproduces_the_figure_it_used_to_report():
+    """10,816 B at [31,16,16] --- kept so the correction is a visible delta.
+
+    This branch counts the corrections a general code replaces and nothing
+    else. It is the number this project reported for a while, and pinning it
+    means the next reader can see exactly which term was missing rather than
+    having to trust that something changed.
+    """
+    from scripts.run_voleith import linear_code_arithmetic
+
+    best = linear_code_arithmetic(167, depth=8)["code_swap_only"]
+    assert (best["k_C"], best["n_C"], best["d_C"]) == (16, 31, 16)
+    assert best["bytes"] == 10816
+    assert best["hashes"] == 15872
+
+
+def test_the_protocol_that_makes_the_code_usable_costs_most_of_the_saving():
+    """Pi_2D-LC, not a code swap. The paper's own '2x overhead', priced.
+
+    The general code is homomorphic across the k_C-blocks and not within one,
+    and our statement is one inner product with a distinct coefficient per
+    value --- within a block. Recovering that needs figure 6, which calls the
+    subspace VOLE for 2l+2 rows instead of l and opens an (l+1) x n_C matrix
+    on top. The saving over the measured repetition-code proof survives, but
+    it is about 2.4x rather than the 4.2x the code swap alone suggested.
+    """
+    from scripts.run_voleith import linear_code_arithmetic
+
+    arithmetic = linear_code_arithmetic(167, depth=8)
+    best = arithmetic["protocol_complete"]
+    assert best["bytes"] == 18896 and best["k_C"] == 32
+    # measured repetition-code proof and measured Pedersen proof, same statement
+    assert round(45616 / best["bytes"], 1) == 2.4
+    assert round(best["bytes"] / 5440, 1) == 3.5
+    # and it is strictly worse than the branch that ignores the protocol
+    assert best["bytes"] > arithmetic["code_swap_only"]["bytes"]

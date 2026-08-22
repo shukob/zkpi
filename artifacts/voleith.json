@@ -289,15 +289,26 @@
     }
   ],
   "linear_code": {
-    "note": "arithmetic only, not implemented",
+    "note": "arithmetic only; Pi_2D-LC is not implemented",
     "depth": 8,
-    "best": {
+    "n_values": 167,
+    "code_swap_only": {
       "k_C": 16,
       "n_C": 31,
       "d_C": 16,
       "rows": 11,
+      "hashes": 15872,
       "bytes": 10816,
-      "hashes": 15872
+      "caveat": "unreachable for a within-block inner product: soundness falls to |S_Delta|^-1 = 2^-8. Kept because it is the figure this file used to report and the correction is the finding"
+    },
+    "protocol_complete": {
+      "k_C": 32,
+      "n_C": 47,
+      "d_C": 16,
+      "rows": 6,
+      "hashes": 24064,
+      "bytes": 18896,
+      "protocol": "Pi_2D-LC, eprint 2023/996 figure 6"
     }
   },
   "phases": {

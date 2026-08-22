@@ -129,32 +129,68 @@ def parameter_sweep(n: int) -> list[dict]:
 
 
 def linear_code_arithmetic(n: int, depth: int = 8) -> dict:
-    """What section 6.1 of the paper would buy, computed rather than measured.
+    """What a general linear code would buy, and what the paper charges for it.
 
     The `[tau,1,tau]` repetition code costs `(tau-1)*n` field elements of
-    consistency correction, and over a 127-bit prime that is the whole proof. A
-    linear code of distance `d_C` replaces it with `ceil(n/k_C)*(n_C-k_C)`,
-    bought with `n_C` trees instead of `tau`. Singleton bounds `d_C` by
-    `n_C-k_C+1`, so a Reed--Solomon code is the best case and this is its
-    arithmetic. **Not implemented**: it is here so the gap between what was
-    measured and what the construction can reach is a number.
+    consistency correction, and over a 127-bit prime that is the whole proof.
+    An `[n_C,k_C,d_C]_p` code replaces it with `ceil(n/k_C)*(n_C-k_C)`, bought
+    with `n_C` trees instead of `tau`, and Singleton bounds `d_C` at
+    `n_C-k_C+1`, so an MDS code is the best case.
+
+    **An earlier version of this function stopped there and reported 10,816 B.
+    That figure is not reachable for the statement this stack proves.** The
+    first paragraph of section 6.1 says why: with the repetition code the
+    commitment is linearly homomorphic for messages in `F_p`, but with a
+    general code it is homomorphic only *across* the `k_C`-blocks --- "linear
+    operations must be applied across the vectors". Our statement is one inner
+    product with a distinct coefficient per witness value, which is a
+    combination *within* a block. Splitting it into `k_C` per-column checks is
+    what a general code allows, and each column is then protected by one entry
+    of `Delta` alone, so the soundness collapses from `|S|^{-d_C}` to `|S|^{-1}`
+    --- 2^-8 at depth 8. The distance protects against opening to a different
+    codeword; it does not protect a per-column opening value.
+
+    The paper's answer is protocol `Pi_2D-LC` (figure 6), which recovers the
+    within-block combination through a degree-2 check and charges for it: the
+    subspace VOLE is called for `2l+2` rows rather than `l`, and the prover
+    additionally opens `S = R + U*Delta'`, an `(l+1) x n_C` matrix. That is the
+    "around 2x overhead on standard VOLE-based protocols" the introduction
+    states. Both totals are returned, because the difference between them is
+    the cost of the code being general.
     """
     width = (P.bit_length() + 7) // 8
     distance = -(-128 // depth)              # |S_Delta|^-d_C <= 2^-128
-    best = None
+    code_only, complete = None, None
     for k_c in (4, 8, 16, 32, 64, 128):
         n_c = k_c + distance - 1             # MDS
         rows = -(-n // k_c)
-        total = (voleith.COMMIT_BYTES + n * width
-                 + rows * (n_c - k_c) * width
-                 + n_c * depth * voleith.SEED_BYTES
-                 + n_c * voleith.COMMIT_BYTES + n_c * width + width)
+        trees = (n_c * depth * voleith.SEED_BYTES
+                 + n_c * voleith.COMMIT_BYTES + voleith.COMMIT_BYTES)
+        # the code swap on its own, which is what the earlier figure counted
+        naive = (trees + n * width + rows * (n_c - k_c) * width
+                 + n_c * width + width)
+        # Pi_2D-LC as figure 6 sends it
+        full = (trees
+                + n * width                              # D = W - U[1..l]
+                + (2 * rows + 2) * (n_c - k_c) * width    # sVOLE, 2l+2 rows
+                + (rows + 1) * n_c * width                # S, the code switch
+                + 3 * width)                              # b~, a~, v~
+        hashes = n_c * (1 << depth) * 2
         row = {"k_C": k_c, "n_C": n_c, "d_C": distance, "rows": rows,
-               "bytes": total, "hashes": n_c * (1 << depth) * 2}
-        if best is None or total < best["bytes"]:
-            best = row
-    return {"note": "arithmetic only, not implemented", "depth": depth,
-            "best": best}
+               "hashes": hashes}
+        if code_only is None or naive < code_only["bytes"]:
+            code_only = dict(row, bytes=naive)
+        if complete is None or full < complete["bytes"]:
+            complete = dict(row, bytes=full)
+    return {
+        "note": "arithmetic only; Pi_2D-LC is not implemented",
+        "depth": depth, "n_values": n,
+        "code_swap_only": dict(code_only, caveat=(
+            "unreachable for a within-block inner product: soundness falls to "
+            "|S_Delta|^-1 = 2^-8. Kept because it is the figure this file used "
+            "to report and the correction is the finding")),
+        "protocol_complete": dict(complete, protocol="Pi_2D-LC, eprint 2023/996 figure 6"),
+    }
 
 
 def main() -> int:
@@ -167,7 +203,29 @@ def main() -> int:
                     help="split the VOLEitH time into hashing and CPython")
     ap.add_argument("--out", type=Path,
                     default=ROOT / "artifacts" / "voleith.json")
+    ap.add_argument("--arithmetic-only", action="store_true",
+                    help="recompute the size arithmetic in an existing artifact "
+                         "and leave the timings alone. The arithmetic does not "
+                         "depend on the host and the timings do, so a rerun on "
+                         "another machine to fix a formula would lose the "
+                         "measurement it was fixing")
     args = ap.parse_args()
+
+    if args.arithmetic_only:
+        if not args.out.exists():
+            print(f"{args.out} does not exist; run without --arithmetic-only",
+                  file=sys.stderr)
+            return 2
+        held = json.loads(args.out.read_text())
+        held["sweep"] = parameter_sweep(max(args.inputs))
+        held["linear_code"] = linear_code_arithmetic(max(args.inputs), args.depth)
+        args.out.write_text(json.dumps(held, indent=2) + "\n")
+        best = held["linear_code"]["protocol_complete"]
+        print(f"recomputed the arithmetic in {args.out}, timings untouched "
+              f"(measured on {held.get('host')})")
+        print(f"  Pi_2D-LC best: k_C={best['k_C']} n_C={best['n_C']} "
+              f"{best['bytes']} B, {best['hashes']} hashes")
+        return 0
 
     schemes = {
         "pedersen": make_linear_proof("pedersen", value_bits=VALUE_BITS),

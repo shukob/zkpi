@@ -47,10 +47,15 @@ this stack's arithmetic lives, they are 16-byte elements, and they dominate the
 proof. `LinearProof.size_breakdown()` reports the split rather than a total, so
 this is visible instead of inferred.
 
-The escape is section 6.1 of the paper: a linear code of rate about 1/2 in place
-of the repetition code turns `(repeats - 1) * ell` into `ell * (n_C - k_C)` with
-`n_C` columns, trading corrections for trees. That is **not implemented here**,
-and section 4.6 of `BINDING.md` says what it would cost.
+The escape looks like section 6.1 of the paper --- a linear code in place of the
+repetition code turns `(repeats - 1) * ell` into `ell * (n_C - k_C)` with `n_C`
+columns, trading corrections for trees --- but it is not a drop-in. Section 6.1
+opens by saying that the repetition code is what makes this a linearly
+homomorphic commitment for messages in `F_p`, and that a general code is
+homomorphic only across the `k_C`-blocks. The statement here is an inner product
+with a distinct coefficient per value, which is within a block, so the general
+code needs the paper's degree-2 protocol and its stated 2x overhead. **Not
+implemented here**; `BINDING.md` section 4.6 prices both ways of counting it.
 
 **These commitments open once.** After `Delta` is published the correlation is
 no longer binding, so a second statement about the same commitment proves
