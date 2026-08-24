@@ -23,7 +23,10 @@ pub struct RangeCtx {
 
 impl RangeCtx {
     pub fn new(bits: usize, max_aggregate: usize) -> Self {
-        assert!(matches!(bits, 8 | 16 | 32 | 64), "bulletproofs takes 8, 16, 32 or 64 bits");
+        assert!(
+            matches!(bits, 8 | 16 | 32 | 64),
+            "bulletproofs takes 8, 16, 32 or 64 bits"
+        );
         RangeCtx {
             pc_gens: PedersenGens::default(),
             bp_gens: BulletproofGens::new(bits, max_aggregate.next_power_of_two()),
@@ -39,7 +42,10 @@ impl RangeCtx {
     /// but silent, and the caller finds out from a rejection rather than from
     /// the call that was wrong.
     pub fn prove(
-        &self, transcript: &mut Transcript, values: &[u64], blindings: &[Scalar],
+        &self,
+        transcript: &mut Transcript,
+        values: &[u64],
+        blindings: &[Scalar],
     ) -> Result<(RangeProof, Vec<CompressedRistretto>), &'static str> {
         if self.bits < 64 && values.iter().any(|v| *v >= (1u64 << self.bits)) {
             return Err("a value does not fit the range being proved");
@@ -58,11 +64,19 @@ impl RangeCtx {
     }
 
     pub fn verify(
-        &self, transcript: &mut Transcript, proof: &RangeProof,
+        &self,
+        transcript: &mut Transcript,
+        proof: &RangeProof,
         commitments: &[CompressedRistretto],
     ) -> bool {
         proof
-            .verify_multiple(&self.bp_gens, &self.pc_gens, transcript, commitments, self.bits)
+            .verify_multiple(
+                &self.bp_gens,
+                &self.pc_gens,
+                transcript,
+                commitments,
+                self.bits,
+            )
             .is_ok()
     }
 }

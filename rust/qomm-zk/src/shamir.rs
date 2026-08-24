@@ -43,12 +43,19 @@ pub fn points(n: usize) -> Vec<Scalar> {
 }
 
 fn evaluate(coefficients: &[Scalar], x: &Scalar) -> Scalar {
-    coefficients.iter().rev().fold(Scalar::ZERO, |acc, c| acc * x + c)
+    coefficients
+        .iter()
+        .rev()
+        .fold(Scalar::ZERO, |acc, c| acc * x + c)
 }
 
 /// One share per point, from a random polynomial with the secret at zero.
-pub fn share<R: RngCore + CryptoRng>(secret: &Scalar, degree: usize,
-                                     points: &[Scalar], rng: &mut R) -> Vec<Scalar> {
+pub fn share<R: RngCore + CryptoRng>(
+    secret: &Scalar,
+    degree: usize,
+    points: &[Scalar],
+    rng: &mut R,
+) -> Vec<Scalar> {
     let mut coefficients = Vec::with_capacity(degree + 1);
     coefficients.push(*secret);
     for _ in 0..degree {
@@ -79,7 +86,10 @@ pub fn reconstruct(points: &[Scalar], shares: &[Scalar]) -> Scalar {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Verdict {
     /// The secret, and which parties sent a share that is not on the polynomial.
-    Decoded { secret: Scalar, culprits: Vec<usize> },
+    Decoded {
+        secret: Scalar,
+        culprits: Vec<usize>,
+    },
     /// More wrong shares than the code can resolve. Naming any party here would
     /// be naming one at random, which is worse than giving up.
     Beyond { capacity: usize, reason: String },
@@ -94,13 +104,20 @@ pub fn locate(points: &[Scalar], shares: &[Scalar], degree: usize) -> Verdict {
     let n = points.len();
     let capacity = capacity(n, degree);
     if shares.len() != n {
-        return Verdict::Beyond { capacity,
-            reason: format!("{} points and {} shares", n, shares.len()) };
+        return Verdict::Beyond {
+            capacity,
+            reason: format!("{} points and {} shares", n, shares.len()),
+        };
     }
     if n < degree + 1 {
-        return Verdict::Beyond { capacity,
-            reason: format!("{n} shares cannot determine a degree-{degree} \
-                             polynomial, which needs {}", degree + 1) };
+        return Verdict::Beyond {
+            capacity,
+            reason: format!(
+                "{n} shares cannot determine a degree-{degree} \
+                             polynomial, which needs {}",
+                degree + 1
+            ),
+        };
     }
 
     // The honest path first: interpolate through the first degree+1 and check
@@ -111,7 +128,10 @@ pub fn locate(points: &[Scalar], shares: &[Scalar], degree: usize) -> Verdict {
         .filter(|i| evaluate(&coefficients, &points[*i]) != shares[*i])
         .collect();
     if disagreeing.is_empty() {
-        return Verdict::Decoded { secret, culprits: Vec::new() };
+        return Verdict::Decoded {
+            secret,
+            culprits: Vec::new(),
+        };
     }
 
     for errors in 1..=capacity {
@@ -121,16 +141,17 @@ pub fn locate(points: &[Scalar], shares: &[Scalar], degree: usize) -> Verdict {
     }
     Verdict::Beyond {
         capacity,
-        reason: format!("more than {capacity} wrong share(s): at n={n} and \
+        reason: format!(
+            "more than {capacity} wrong share(s): at n={n} and \
                          degree {degree} the code has distance {}, so this is \
-                         beyond what any decoder can resolve", n - degree),
+                         beyond what any decoder can resolve",
+            n - degree
+        ),
     }
 }
 
 /// Berlekamp--Welch for exactly `errors` errors, or `None` if there are not that many.
-fn welch(points: &[Scalar], shares: &[Scalar], degree: usize, errors: usize)
-    -> Option<Verdict>
-{
+fn welch(points: &[Scalar], shares: &[Scalar], degree: usize, errors: usize) -> Option<Verdict> {
     // Q(x) = E(x) * P(x) with deg E = errors, deg Q <= degree + errors.
     // Unknowns: Q's degree+errors+1 coefficients and E's `errors` (E is monic).
     let n = points.len();
@@ -179,34 +200,42 @@ fn welch(points: &[Scalar], shares: &[Scalar], degree: usize, errors: usize)
             return None;
         }
     }
-    Some(Verdict::Decoded { secret: *p.first().unwrap_or(&Scalar::ZERO), culprits })
+    Some(Verdict::Decoded {
+        secret: *p.first().unwrap_or(&Scalar::ZERO),
+        culprits,
+    })
 }
 
 /// Gaussian elimination with the free variables set to zero.
-fn solve(matrix: &mut [Vec<Scalar>], rhs: &mut [Scalar], unknowns: usize)
-    -> Option<Vec<Scalar>>
-{
+fn solve(matrix: &mut [Vec<Scalar>], rhs: &mut [Scalar], unknowns: usize) -> Option<Vec<Scalar>> {
     let rows = matrix.len();
     let mut pivot_of = vec![usize::MAX; unknowns];
     let mut row = 0;
     for column in 0..unknowns {
-        let Some(found) = (row..rows).find(|r| matrix[*r][column] != Scalar::ZERO)
-        else { continue };
+        let Some(found) = (row..rows).find(|r| matrix[*r][column] != Scalar::ZERO) else {
+            continue;
+        };
         matrix.swap(row, found);
         rhs.swap(row, found);
         let inverse = matrix[row][column].invert();
-        for c in column..unknowns {
-            matrix[row][c] *= inverse;
+        for cell in matrix[row].iter_mut().take(unknowns).skip(column) {
+            *cell *= inverse;
         }
         rhs[row] *= inverse;
-        for r in 0..rows {
-            if r == row || matrix[r][column] == Scalar::ZERO {
+        let pivot_row = matrix[row].clone();
+        for (r, matrix_row) in matrix.iter_mut().enumerate() {
+            if r == row || matrix_row[column] == Scalar::ZERO {
                 continue;
             }
-            let factor = matrix[r][column];
-            for c in column..unknowns {
-                let value = matrix[row][c] * factor;
-                matrix[r][c] -= value;
+            let factor = matrix_row[column];
+            for (c, cell) in matrix_row
+                .iter_mut()
+                .enumerate()
+                .take(unknowns)
+                .skip(column)
+            {
+                let value = pivot_row[c] * factor;
+                *cell -= value;
             }
             let value = rhs[row] * factor;
             rhs[r] -= value;
@@ -218,14 +247,22 @@ fn solve(matrix: &mut [Vec<Scalar>], rhs: &mut [Scalar], unknowns: usize)
         }
     }
     // A row that is all zeros with a non-zero right-hand side has no solution.
-    for r in row..rows {
-        if rhs[r] != Scalar::ZERO && matrix[r].iter().all(|v| *v == Scalar::ZERO) {
+    for (r, matrix_row) in matrix.iter().enumerate().take(rows).skip(row) {
+        if rhs[r] != Scalar::ZERO && matrix_row.iter().all(|v| *v == Scalar::ZERO) {
             return None;
         }
     }
-    Some((0..unknowns)
-        .map(|c| if pivot_of[c] == usize::MAX { Scalar::ZERO } else { rhs[pivot_of[c]] })
-        .collect())
+    Some(
+        (0..unknowns)
+            .map(|c| {
+                if pivot_of[c] == usize::MAX {
+                    Scalar::ZERO
+                } else {
+                    rhs[pivot_of[c]]
+                }
+            })
+            .collect(),
+    )
 }
 
 /// Polynomial division, and whether it came out exact.
@@ -233,7 +270,10 @@ fn divide(numerator: &[Scalar], denominator: &[Scalar]) -> Option<(Vec<Scalar>, 
     let mut remainder = numerator.to_vec();
     let d = denominator.len() - 1;
     if remainder.len() <= d {
-        return Some((vec![Scalar::ZERO], remainder.iter().all(|v| *v == Scalar::ZERO)));
+        return Some((
+            vec![Scalar::ZERO],
+            remainder.iter().all(|v| *v == Scalar::ZERO),
+        ));
     }
     let lead = denominator[d].invert();
     let mut quotient = vec![Scalar::ZERO; remainder.len() - d];
@@ -245,7 +285,9 @@ fn divide(numerator: &[Scalar], denominator: &[Scalar]) -> Option<(Vec<Scalar>, 
             remainder[i + j] -= value;
         }
     }
-    let exact = remainder[..d.min(remainder.len())].iter().all(|v| *v == Scalar::ZERO);
+    let exact = remainder[..d.min(remainder.len())]
+        .iter()
+        .all(|v| *v == Scalar::ZERO);
     Some((quotient, exact))
 }
 

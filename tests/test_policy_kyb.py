@@ -292,6 +292,8 @@ def test_a_prover_that_skips_its_own_range_check_is_still_rejected(group):
     """The prover-side guard is convenience; the verifier is the security boundary."""
     from zk.commit import prove_range, verify_bounded, shift_commitment
 
+    from zk.commit import BoundedProof
+
     key = Pedersen(group, b"qomm:policy:v1")
     low, high = PolicyBounds().half          # (1, 200) -> 8 bits after shifting
     bits = max(1, (high - low).bit_length())
@@ -301,8 +303,21 @@ def test_a_prover_that_skips_its_own_range_check_is_still_rejected(group):
     shifted = shift_commitment(key, commitment, low)
     # a malicious maker proves the truncated value, which is what fits the width
     truncated = (out_of_band - low) % (1 << bits)
-    forged = prove_range(key, shifted, truncated, blinding, bits, b"ctx")
-    assert not verify_bounded(key, commitment, forged, low, high, b"ctx")
+    forged = prove_range(key, shifted, truncated, blinding, bits, b"ctx|above")
+    # the same trick on the other side, so the refusal is not merely the second
+    # proof being absent
+    ceiling = key.commit(high, 0)
+    below_commitment = group.mul(commitment_inverse(group, commitment), ceiling)
+    forged_below = prove_range(key, below_commitment,
+                               (high - out_of_band) % (1 << bits),
+                               (-blinding) % group.order, bits, b"ctx|below")
+    assert not verify_bounded(key, commitment,
+                              BoundedProof(forged, forged_below, bits),
+                              low, high, b"ctx")
+
+
+def commitment_inverse(group, commitment):
+    return group.point_pow(commitment, group.order - 1)
 
 
 def test_range_proof_rejects_a_relabelled_width(group):
@@ -314,3 +329,36 @@ def test_range_proof_rejects_a_relabelled_width(group):
     assert verify_bounded(key, commitment, proof, 0, 1023, b"ctx")
     # the same proof must not pass as evidence for a tighter interval
     assert not verify_bounded(key, commitment, proof, 0, 255, b"ctx")
+
+
+def test_a_published_band_is_the_band_that_is_enforced(group):
+    """The gap a one-sided range proof leaves, and that it is now closed.
+
+    A range proof over `bits` establishes `0 <= value - low < 2^bits`, and
+    `bits` is the width of the span. Unless the span is one less than a power of
+    two the interval enforced is wider than the one published: `half` is
+    published as [1, 200], 199 needs eight bits, and eight bits reach 255. So
+    201 through 256 used to verify against a band that stops at 200.
+
+    It never leaked the value --- the hiding is untouched --- but the venue's
+    published statement that every field is inside its band was false for values
+    in the gap, by up to a factor of two per field. Both sides are proved now.
+    """
+    from zk.commit import prove_bounded, verify_bounded
+
+    key = Pedersen(group, b"qomm:policy:v1")
+    low, high = PolicyBounds().half
+    assert (high - low).bit_length() == 8 and (1 << 8) > high - low + 1, \
+        "the band must not be one less than a power of two, or there is no gap"
+
+    for value in (low, (low + high) // 2, high):
+        commitment, proof, _ = prove_bounded(
+            key, value, key.random_blinding(), low, high, b"band")
+        assert verify_bounded(key, commitment, proof, low, high, b"band"), \
+            f"an honest {value} was refused"
+
+    # the honest prover refuses out of band, and the interesting cases are the
+    # ones inside the old power-of-two window
+    for value in (high + 1, low + (1 << 8) - 1):
+        with pytest.raises(ValueError):
+            prove_bounded(key, value, key.random_blinding(), low, high, b"band")

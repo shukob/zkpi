@@ -329,17 +329,34 @@ class QuoteProver:
 
 class QuoteVerifier:
     def __init__(self, group: Group, key: Pedersen | None = None,
-                 sentinel_bits: int = 24):
+                 sentinel_bits: int = 24, assembled: bool = False):
         self.group = group
         self.key = key or Pedersen(group, b"qomm:policy:v1")
         self.sentinel_bits = sentinel_bits
+        # `assembled` selects the two leaf proofs a shared prover can actually
+        # produce. A disjunction picks which branch to simulate *from* the bit,
+        # and a node holding a share cannot make a control-flow decision, so an
+        # assembled proof shows `b*b = b` instead --- the same statement over a
+        # prime field --- and its range proofs are built from those. Everything
+        # above the leaves is identical, which is why this is a switch here
+        # rather than a second verifier: a copy of this logic is where the next
+        # defect would live.
+        self.assembled = assembled
+        if assembled:
+            from .threshold_gadgets import verify_square_bit
+            from .threshold_range import verify_threshold_range
+            self._verify_bit = verify_square_bit
+            self._verify_range = verify_threshold_range
+        else:
+            self._verify_bit = verify_bit
+            self._verify_range = verify_range
 
     def _check_ge_zero_bit(self, c, maker, name: str, base, tag: bytes) -> bool:
         """The mirror of `_ge_zero_bit`: one product and one derived range."""
         key, group = self.key, self.group
         bit = c[f"{name}_bit"]
         product = c[f"{name}_product"]
-        if not verify_bit(key, bit, getattr(maker, f"{name}_bit"), tag + b":bit"):
+        if not self._verify_bit(key, bit, getattr(maker, f"{name}_bit"), tag + b":bit"):
             return False
         if not verify_product(key, bit, base, product,
                               getattr(maker, f"{name}_product"), tag + b":prod"):
@@ -348,7 +365,8 @@ class QuoteVerifier:
         witness = group.mul(witness, group.neg(key.commit(1, 0)))
         if group.encode(witness) != group.encode(c[f"{name}_t"]):
             return False
-        return verify_range(key, c[f"{name}_t"], getattr(maker, name), tag + b":ge")
+        return self._verify_range(key, c[f"{name}_t"], getattr(maker, name),
+                                  tag + b":ge")
 
     def verify(self, proof: QuoteProof, public: Mapping[str, Any],
                context: bytes = b"") -> tuple[bool, str]:
@@ -370,6 +388,28 @@ class QuoteVerifier:
         expected = registry_digest(group, registered)
         if public.get("registry_digest") != expected:
             return False, "the registered set is not the one this statement names"
+
+        # Shape, before any algebra. A proof with no makers used to verify
+        # against an empty register, a winner index used to be a Python index
+        # so a negative one silently named a different commitment, an index
+        # past the end raised `IndexError` instead of refusing, and `minimality`
+        # used to be iterated --- so deleting it verified. Each of those is a
+        # proof that says nothing being accepted as one that says something.
+        if not proof.maker_proofs:
+            return False, "a proof about no makers is not a proof about a market"
+        if len(proof.key_commitments) != len(proof.maker_proofs):
+            return False, (f"{len(proof.key_commitments)} keys for "
+                           f"{len(proof.maker_proofs)} makers")
+        if len(proof.minimality) != len(proof.maker_proofs):
+            return False, (f"{len(proof.minimality)} minimality proofs for "
+                           f"{len(proof.maker_proofs)} makers; every maker has "
+                           "to be shown at least the winner")
+        if not 0 <= proof.winner_index < len(proof.key_commitments):
+            return False, f"winner index {proof.winner_index} is not a maker"
+
+        sentinel = public["sentinel"]
+        n_slots = public["n_slots"]
+        direction = public["direction"]
 
         for index, maker in enumerate(proof.maker_proofs):
             tag = context + b":mm:" + index.to_bytes(2, "big")
@@ -405,7 +445,7 @@ class QuoteVerifier:
                                                tag + b":" + name.encode()):
                     return False, (f"maker {index}: the {name} test is not what "
                                    "its bit says it is")
-            if not verify_bit(key, c["active"], maker.active_bit, tag + b":active"):
+            if not self._verify_bit(key, c["active"], maker.active_bit, tag + b":active"):
                 return False, f"maker {index}: active flag is not a bit"
             # ok = fits and fresh and active, proved rather than committed. This
             # is what stops an eligible maker being switched off: the bit is a
@@ -418,9 +458,38 @@ class QuoteVerifier:
                                   second, tag + b":ok:2"):
                 return False, (f"maker {index}: eligibility is not the "
                                "conjunction of its three tests")
+            # The cost has to *be* the policy applied to the request, and the
+            # key has to be that cost. Nothing used to say so: `cost` and
+            # `shifted_cost` were commitments the prover supplied and the
+            # verifier read, and `key_commitments` were unrelated to `gated`.
+            # Replacing the cost commitment left the proof verifying, and a
+            # proof built for one direction verified when published as the
+            # other --- naming a winner that was not the winner. All of it is
+            # linear, so all of it is an equality on commitments the verifier
+            # already holds rather than a proof anyone has to produce.
+            ask = group.mul(group.mul(group.mul(c["mid"], c["half"]),
+                                      c["depth"]), c["skew"])
+            bid = group.mul(group.mul(group.mul(c["mid"], group.neg(c["half"])),
+                                      group.neg(c["depth"])), c["skew"])
+            derived_cost = group.neg(bid) if direction == 1 else ask
+            if group.encode(derived_cost) != group.encode(c["cost"]):
+                return False, (f"maker {index}: the cost is not the registered "
+                               "policy applied to this request in this direction")
+            derived_shifted = group.mul(c["cost"], group.neg(key.commit(sentinel, 0)))
+            if group.encode(derived_shifted) != group.encode(c["shifted_cost"]):
+                return False, f"maker {index}: the gated cost is not cost - sentinel"
             if not verify_product(key, c["ok"], c["shifted_cost"], c["gated"],
                                   maker.gate_cost, tag + b":gate"):
                 return False, f"maker {index}: cost is not gated by eligibility"
+            # key = (gated + sentinel) * n_slots + index, which in the exponent
+            # is the gated commitment raised to n_slots and shifted by a public
+            # constant. The blinding follows because the prover scales it the
+            # same way, so this is an equality and not another proof.
+            derived_key = group.mul(group.point_pow(c["gated"], n_slots),
+                                    key.commit(sentinel * n_slots + index, 0))
+            if group.encode(derived_key) != group.encode(proof.key_commitments[index]):
+                return False, (f"maker {index}: the key is not this maker's gated "
+                               "cost packed with its slot")
 
         # The verifier reconstructs the same residual from the published value,
         # so a proof made for one price does not carry to another.
@@ -433,7 +502,7 @@ class QuoteVerifier:
         for index, range_proof in enumerate(proof.minimality):
             difference = group.mul(proof.key_commitments[index],
                                    group.neg(proof.key_commitments[proof.winner_index]))
-            if not verify_range(key, difference, range_proof,
-                                context + b":min:" + index.to_bytes(2, "big")):
+            if not self._verify_range(key, difference, range_proof,
+                                      context + b":min:" + index.to_bytes(2, "big")):
                 return False, f"maker {index}: not shown to be at least the winner"
         return True, "ok"

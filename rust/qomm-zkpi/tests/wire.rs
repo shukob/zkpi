@@ -19,7 +19,10 @@ fn an_instruction_survives_the_wire_unchanged() {
     assert_eq!(back.quote_key, instruction.quote_key);
     assert_eq!(back.nonce, instruction.nonce);
     assert_eq!(back.amount_commitment, instruction.amount_commitment);
-    assert_eq!(back.range_commitments.len(), instruction.range_commitments.len());
+    assert_eq!(
+        back.range_commitments.len(),
+        instruction.range_commitments.len()
+    );
 }
 
 #[test]
@@ -52,10 +55,15 @@ fn every_shipped_vector_does_what_it_says() {
 fn a_version_this_build_does_not_know_is_refused_and_not_guessed_at() {
     let mut bytes = encode(&wire_vectors::sample());
     bytes[MAGIC.len()..MAGIC.len() + 2].copy_from_slice(&(VERSION + 1).to_be_bytes());
-    assert_eq!(decode(&bytes).err(), Some(WireError::UnknownVersion(VERSION + 1)));
+    assert_eq!(
+        decode(&bytes).err(),
+        Some(WireError::UnknownVersion(VERSION + 1))
+    );
     // and the message says why, because guessing at a layout is the failure
     // that settles a different payment rather than none
-    assert!(WireError::UnknownVersion(2).to_string().contains("valid point"));
+    assert!(WireError::UnknownVersion(2)
+        .to_string()
+        .contains("valid point"));
 }
 
 #[test]
@@ -68,7 +76,9 @@ fn a_byte_left_over_is_a_different_message() {
 #[test]
 fn a_truncated_instruction_names_where_it_ran_out() {
     let bytes = encode(&wire_vectors::sample());
-    let why = decode(&bytes[..bytes.len() - 1]).err().expect("it is short");
+    let why = decode(&bytes[..bytes.len() - 1])
+        .err()
+        .expect("it is short");
     assert!(matches!(why, WireError::Truncated { .. }), "{why:?}");
     assert!(why.to_string().contains("were left"), "{why}");
 }
@@ -84,9 +94,18 @@ fn a_commitment_that_is_not_a_group_element_is_refused() {
 
 #[test]
 fn something_that_is_not_an_instruction_at_all_says_so() {
-    assert_eq!(decode(b"hello").err(), Some(WireError::Truncated {
-        wanted: 8, had: 5, at: "magic" }));
-    assert_eq!(decode(b"NOTQOMM!more").err(), Some(WireError::NotAnInstruction));
+    assert_eq!(
+        decode(b"hello").err(),
+        Some(WireError::Truncated {
+            wanted: 8,
+            had: 5,
+            at: "magic"
+        })
+    );
+    assert_eq!(
+        decode(b"NOTQOMM!more").err(),
+        Some(WireError::NotAnInstruction)
+    );
 }
 
 #[test]
@@ -111,8 +130,11 @@ fn a_flipped_bit_anywhere_in_the_body_is_caught_by_something() {
             }
         }
     }
-    assert_eq!(caught, (0..bytes.len()).step_by(37).count(),
-               "every flip is either a decode failure or a different digest");
+    assert_eq!(
+        caught,
+        (0..bytes.len()).step_by(37).count(),
+        "every flip is either a decode failure or a different digest"
+    );
 }
 
 #[test]
@@ -123,7 +145,7 @@ fn the_wire_is_the_size_the_table_says() {
     let instruction = decode(&bytes).unwrap();
     let fixed = 8 + 2 + 5 * 32 + 8 + 32 + 8 + 64 + 2;
     let commitments = instruction.range_commitments.len() * 32;
-    let proofs = instruction.amount_range.to_bytes().len()
-        + instruction.price_range.to_bytes().len() + 8;
+    let proofs =
+        instruction.amount_range.to_bytes().len() + instruction.price_range.to_bytes().len() + 8;
     assert_eq!(bytes.len(), fixed + commitments + proofs);
 }

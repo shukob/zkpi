@@ -144,6 +144,8 @@ def prove_bit(key: Pedersen, commitment, bit: int, blinding: int,
 def verify_bit(key: Pedersen, commitment, proof: BitProof, context: bytes = b"") -> bool:
     group = key.group
     order = group.order
+    if not isinstance(proof, BitProof):
+        return False
     if not (group.is_valid(proof.t0) and group.is_valid(proof.t1)):
         return False
     if any(not 0 <= v < order for v in (proof.c0, proof.c1, proof.z0, proof.z1)):
@@ -198,6 +200,8 @@ def prove_range(key: Pedersen, commitment, value: int, blinding: int, bits: int,
 def verify_range(key: Pedersen, commitment, proof: RangeProof,
                  context: bytes = b"") -> bool:
     group = key.group
+    if not isinstance(proof, RangeProof):
+        return False
     if len(proof.bit_commitments) != proof.bits or len(proof.bit_proofs) != proof.bits:
         return False
     for j, (bit_commitment, bit_proof) in enumerate(zip(proof.bit_commitments, proof.bit_proofs)):
@@ -214,11 +218,23 @@ def verify_range(key: Pedersen, commitment, proof: RangeProof,
 
 
 def prove_bounded(key: Pedersen, value: int, blinding: int, low: int, high: int,
-                  context: bytes = b"") -> tuple[Any, RangeProof, int]:
-    """Prove low <= value <= high by shifting into [0, 2^bits).
+                  context: bytes = b"") -> tuple[Any, "BoundedProof", int]:
+    """Prove low <= value <= high, on both sides.
 
-    Returns the commitment to ``value``, the range proof on the shifted value and
-    the bit width used, so the verifier can rebuild the shifted commitment.
+    One shifted range proof is not enough and used not to be recognised as such.
+    A range proof over `bits` establishes `0 <= value - low < 2^bits`, and
+    `bits` is the width of the span, so unless the span is one less than a power
+    of two the interval actually enforced is *wider than the one published*: a
+    band of `[1, 200]` was accepting 201 through 256, because 199 needs eight
+    bits and eight bits reach 255. That does not leak the value --- the hiding
+    is untouched --- but the venue's published statement that every field is
+    inside its band was false for values in the gap, by up to a factor of two
+    per field.
+
+    Both sides are therefore proved: `value - low` and `high - value` are each
+    in `[0, 2^bits)`, and their sum is fixed at `span`, so together they pin the
+    interval exactly. It costs a second range proof, which against a sixty-second
+    disclosure interval is not a cost worth a wrong bound.
     """
     span = high - low
     if span < 0:
@@ -227,9 +243,25 @@ def prove_bounded(key: Pedersen, value: int, blinding: int, low: int, high: int,
     if not low <= value <= high:
         raise ValueError(f"value {value} outside [{low}, {high}]")
     commitment = key.commit(value, blinding)
-    shifted_commitment = shift_commitment(key, commitment, low)
-    proof = prove_range(key, shifted_commitment, value - low, blinding, bits, context)
-    return commitment, proof, bits
+    above = prove_range(key, shift_commitment(key, commitment, low),
+                        value - low, blinding, bits, context + b"|above")
+    # `high - value` commits under the negated blinding, since
+    # C_high / C = g^(high-value) h^(-r)
+    ceiling = key.commit(high, 0)
+    below_commitment = key.group.mul(
+        ceiling, key.group.point_pow(commitment, key.group.order - 1))
+    below = prove_range(key, below_commitment, high - value,
+                        (-blinding) % key.group.order, bits, context + b"|below")
+    return commitment, BoundedProof(above=above, below=below, bits=bits), bits
+
+
+@dataclass(frozen=True)
+class BoundedProof:
+    """Two range proofs that together pin an interval that is not a power of two."""
+
+    above: RangeProof
+    below: RangeProof
+    bits: int
 
 
 def shift_commitment(key: Pedersen, commitment, low: int):
@@ -239,14 +271,21 @@ def shift_commitment(key: Pedersen, commitment, low: int):
                      group.neg(group.point_pow(key.g, low % group.order)))
 
 
-def verify_bounded(key: Pedersen, commitment, proof: RangeProof, low: int, high: int,
-                   context: bytes = b"") -> bool:
+def verify_bounded(key: Pedersen, commitment, proof: "BoundedProof", low: int,
+                   high: int, context: bytes = b"") -> bool:
     span = high - low
-    if span < 0 or proof.bits != max(1, span.bit_length()):
+    bits = max(1, span.bit_length())
+    if span < 0 or proof.bits != bits:
         return False
     if not key.group.is_valid(commitment):
         return False
-    return verify_range(key, shift_commitment(key, commitment, low), proof, context)
+    if not verify_range(key, shift_commitment(key, commitment, low),
+                        proof.above, context + b"|above"):
+        return False
+    ceiling = key.commit(high, 0)
+    below_commitment = key.group.mul(
+        ceiling, key.group.point_pow(commitment, key.group.order - 1))
+    return verify_range(key, below_commitment, proof.below, context + b"|below")
 
 
 def _combine(group, commitments: Sequence, coefficients: Sequence[int]):
@@ -335,6 +374,12 @@ def prove_product(key: Pedersen, c_a, a: int, r_a: int, b: int, r_b: int,
 def verify_product(key: Pedersen, c_a, c_b, c_c, proof: ProductProof,
                    context: bytes = b"") -> bool:
     group = key.group
+    # A proof of the wrong shape is a refusal and not an exception. The two
+    # verifier flavours accept different leaf objects, and a caller handed the
+    # other one has to be told "no" rather than have the process die --- the
+    # difference matters because one of those is a denial of service.
+    if not isinstance(proof, ProductProof):
+        return False
     if not (group.is_valid(proof.t_factor) and group.is_valid(proof.t_product)):
         return False
     if any(not 0 <= v < group.order for v in (proof.z_b, proof.z_rb, proof.z_s)):

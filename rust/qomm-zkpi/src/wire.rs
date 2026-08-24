@@ -62,7 +62,11 @@ pub enum WireError {
     /// A version this build does not know. Refused rather than guessed at: a
     /// misparsed commitment is still a valid point.
     UnknownVersion(u16),
-    Truncated { wanted: usize, had: usize, at: &'static str },
+    Truncated {
+        wanted: usize,
+        had: usize,
+        at: &'static str,
+    },
     NotAPoint(&'static str),
     BadSignature,
     /// Bytes left over. An instruction is exactly as long as it is.
@@ -73,16 +77,21 @@ impl std::fmt::Display for WireError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             WireError::NotAnInstruction => write!(f, "this does not begin QOMMZKPI"),
-            WireError::UnknownVersion(v) => write!(f,
+            WireError::UnknownVersion(v) => write!(
+                f,
                 "version {v}, and this build knows {VERSION}. Refused rather \
-                 than guessed at --- a misparsed commitment is a valid point."),
-            WireError::Truncated { wanted, had, at } =>
-                write!(f, "{at}: wanted {wanted} bytes and {had} were left"),
+                 than guessed at --- a misparsed commitment is a valid point."
+            ),
+            WireError::Truncated { wanted, had, at } => {
+                write!(f, "{at}: wanted {wanted} bytes and {had} were left")
+            }
             WireError::NotAPoint(what) => write!(f, "{what} is not a group element"),
             WireError::BadSignature => write!(f, "the signature is not well formed"),
-            WireError::Trailing(n) => write!(f,
+            WireError::Trailing(n) => write!(
+                f,
                 "{n} bytes after the end. An instruction is exactly as long as \
-                 it is, so this is a different message."),
+                 it is, so this is a different message."
+            ),
         }
     }
 }
@@ -96,7 +105,10 @@ impl<'a> Reader<'a> {
     fn take(&mut self, n: usize, what: &'static str) -> Result<&'a [u8], WireError> {
         if self.bytes.len() - self.at < n {
             return Err(WireError::Truncated {
-                wanted: n, had: self.bytes.len() - self.at, at: what });
+                wanted: n,
+                had: self.bytes.len() - self.at,
+                at: what,
+            });
         }
         let slice = &self.bytes[self.at..self.at + n];
         self.at += n;
@@ -105,7 +117,9 @@ impl<'a> Reader<'a> {
 
     fn point(&mut self, what: &'static str) -> Result<RistrettoPoint, WireError> {
         let bytes: [u8; 32] = self.take(32, what)?.try_into().unwrap();
-        CompressedRistretto(bytes).decompress().ok_or(WireError::NotAPoint(what))
+        CompressedRistretto(bytes)
+            .decompress()
+            .ok_or(WireError::NotAPoint(what))
     }
 
     fn u64(&mut self, what: &'static str) -> Result<u64, WireError> {
@@ -125,16 +139,24 @@ pub fn encode(instruction: &Instruction) -> Vec<u8> {
     let mut out = Vec::with_capacity(512);
     out.extend_from_slice(MAGIC);
     out.extend_from_slice(&VERSION.to_be_bytes());
-    for point in [&instruction.amount_commitment, &instruction.price_commitment,
-                  &instruction.asset_commitment, &instruction.payer_handle,
-                  &instruction.payee_handle] {
+    for point in [
+        &instruction.amount_commitment,
+        &instruction.price_commitment,
+        &instruction.asset_commitment,
+        &instruction.payer_handle,
+        &instruction.payee_handle,
+    ] {
         out.extend_from_slice(point.compress().as_bytes());
     }
     out.extend_from_slice(&instruction.deadline.to_be_bytes());
     out.extend_from_slice(&instruction.nonce);
     out.extend_from_slice(&instruction.quote_key.to_be_bytes());
-    out.extend_from_slice(&instruction.signature.serialize()
-        .expect("a FROST signature serialises"));
+    out.extend_from_slice(
+        &instruction
+            .signature
+            .serialize()
+            .expect("a FROST signature serialises"),
+    );
     out.extend_from_slice(&(instruction.range_commitments.len() as u16).to_be_bytes());
     for commitment in &instruction.range_commitments {
         out.extend_from_slice(commitment.as_bytes());
@@ -176,18 +198,27 @@ pub fn decode(bytes: &[u8]) -> Result<Instruction, WireError> {
     for what in ["amount range proof", "price range proof"] {
         let len = r.u32(what)? as usize;
         let raw = r.take(len, what)?;
-        proofs.push(bulletproofs::RangeProof::from_bytes(raw)
-            .map_err(|_| WireError::NotAPoint(what))?);
+        proofs.push(
+            bulletproofs::RangeProof::from_bytes(raw).map_err(|_| WireError::NotAPoint(what))?,
+        );
     }
     if r.at != bytes.len() {
         return Err(WireError::Trailing(bytes.len() - r.at));
     }
     let mut proofs = proofs.into_iter();
     Ok(Instruction {
-        amount_commitment, price_commitment, asset_commitment,
-        amount_range: proofs.next().unwrap(), price_range: proofs.next().unwrap(),
-        range_commitments, payer_handle, payee_handle, deadline, nonce,
-        quote_key, signature,
+        amount_commitment,
+        price_commitment,
+        asset_commitment,
+        amount_range: proofs.next().unwrap(),
+        price_range: proofs.next().unwrap(),
+        range_commitments,
+        payer_handle,
+        payee_handle,
+        deadline,
+        nonce,
+        quote_key,
+        signature,
     })
 }
 
@@ -217,7 +248,6 @@ pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-
 /// The layout, as a table, so the specification is emitted rather than kept.
 ///
 /// A document beside the code is a document that drifts from it. The field
@@ -226,9 +256,11 @@ pub fn hex(bytes: &[u8]) -> String {
 pub fn spec() -> String {
     let mut out = String::new();
     out.push_str("# zkPI on the wire, version 1\n\n");
-    out.push_str("Big-endian throughout. Every field is fixed-width or \
+    out.push_str(
+        "Big-endian throughout. Every field is fixed-width or \
 length-prefixed, and the order below is the order on the wire. Nothing is \
-optional: an instruction with a field missing is not a shorter instruction.\n\n");
+optional: an instruction with a field missing is not a shorter instruction.\n\n",
+    );
     out.push_str("| field | bytes | what |\n| --- | ---: | --- |\n");
     for (field, width, what) in [
         ("magic", "8", "`QOMMZKPI`"),
@@ -252,8 +284,10 @@ optional: an instruction with a field missing is not a shorter instruction.\n\n"
         out.push_str(&format!("| {field} | {width} | {what} |\n"));
     }
     out.push_str("\n## What is deliberately absent\n\n");
-    out.push_str("No compression, no self-describing container, no forward \
+    out.push_str(
+        "No compression, no self-describing container, no forward \
 compatibility. Each is a way for two implementations to disagree about what \
-they read, and the table above is a day's work to implement from.\n");
+they read, and the table above is a day's work to implement from.\n",
+    );
     out
 }

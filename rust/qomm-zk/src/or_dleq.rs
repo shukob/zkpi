@@ -56,22 +56,33 @@ pub fn nullifier(scope: &[u8], secret: &Scalar) -> RistrettoPoint {
 }
 
 fn challenge(
-    statement: &Statement, nullifier: &RistrettoPoint,
-    commit_g: &[RistrettoPoint], commit_h: &[RistrettoPoint],
+    statement: &Statement,
+    nullifier: &RistrettoPoint,
+    commit_g: &[RistrettoPoint],
+    commit_h: &[RistrettoPoint],
 ) -> Scalar {
     let mut t = Transcript::new(b"qomm:or-dleq:v1");
     t.append_message(b"registry", statement.registry_id);
     t.append_message(b"scope", statement.scope);
     t.append_message(b"context", statement.context_hash);
     t.append_point(b"N", nullifier);
-    for point in statement.points { t.append_point(b"P", point); }
-    for point in commit_g { t.append_point(b"A", point); }
-    for point in commit_h { t.append_point(b"B", point); }
+    for point in statement.points {
+        t.append_point(b"P", point);
+    }
+    for point in commit_g {
+        t.append_point(b"A", point);
+    }
+    for point in commit_h {
+        t.append_point(b"B", point);
+    }
     t.challenge_scalar(b"c")
 }
 
 pub fn prove<R: RngCore + CryptoRng>(
-    statement: &Statement, secret: &Scalar, index: usize, rng: &mut R,
+    statement: &Statement,
+    secret: &Scalar,
+    index: usize,
+    rng: &mut R,
 ) -> Result<Proof, &'static str> {
     let n = statement.points.len();
     if index >= n {
@@ -107,7 +118,11 @@ pub fn prove<R: RngCore + CryptoRng>(
     let others: Scalar = challenges.iter().sum();
     challenges[index] = total - others;
     responses[index] = witness_nonce + challenges[index] * secret;
-    Ok(Proof { nullifier: null, challenges, responses })
+    Ok(Proof {
+        nullifier: null,
+        challenges,
+        responses,
+    })
 }
 
 pub fn verify(statement: &Statement, proof: &Proof) -> bool {
@@ -117,8 +132,10 @@ pub fn verify(statement: &Statement, proof: &Proof) -> bool {
     }
     let h_scope = scope_generator(statement.scope);
     let commit_g: Vec<RistrettoPoint> = (0..n)
-        .map(|i| RISTRETTO_BASEPOINT_POINT * proof.responses[i]
-             - statement.points[i] * proof.challenges[i])
+        .map(|i| {
+            RISTRETTO_BASEPOINT_POINT * proof.responses[i]
+                - statement.points[i] * proof.challenges[i]
+        })
         .collect();
     let commit_h: Vec<RistrettoPoint> = (0..n)
         .map(|i| h_scope * proof.responses[i] - proof.nullifier * proof.challenges[i])

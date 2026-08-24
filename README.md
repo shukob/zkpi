@@ -4,6 +4,7 @@
 
 Proof-carrying instructions: a venue's decision, provable without the inputs that produced it.
 
+
 ## What it does
 
 ```mermaid
@@ -86,10 +87,10 @@ flowchart TB
     HAN --> INS
 ```
 
-Exported from a single research tree by `scripts/export_repos.py`, which is why
-the layout is regular across the three repositories and why nothing here is
-hand-maintained. Corrections are welcome; they belong upstream, and the export
-is re-run.
+Generated from one shared research tree, which is why the layout is regular
+across the three repositories. This repository is nevertheless self-contained:
+its tests, locks, measurements and source do not require the private working
+tree.
 
 ## What is here
 
@@ -115,12 +116,14 @@ this copy does.
 - [`POSITION.md`](POSITION.md) --- what is new here and what is not, stated line by line against the nearest prior work
 - [`ACCOUNTABILITY.md`](ACCOUNTABILITY.md) --- what happens when a node misbehaves: the five rungs from abort to guaranteed output delivery, and which one each mechanism here reaches
 - [`ZKPI_WIRE.md`](ZKPI_WIRE.md) --- the bytes an instruction travels as, the vectors to check an implementation against, and where it can run
+- [`REVIEW.md`](REVIEW.md) --- what two rounds of review found, including what was checked and found sound
 
 ## Running it
 
 ```
-cargo test --release          # in rust/
-python3 -m pytest tests/      # from the repository root
+cargo test --workspace --all-targets --all-features --release  # in rust/
+uv sync --frozen
+uv run --frozen pytest tests/                               # repository root
 ```
 
 ## Measurements

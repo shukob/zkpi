@@ -68,7 +68,10 @@ pub struct Adaptor {
 impl Adaptor {
     pub fn random<R: RngCore + CryptoRng>(rng: &mut R) -> Adaptor {
         let secret = Scalar::random(rng);
-        Adaptor { secret, point: &secret * RISTRETTO_BASEPOINT_TABLE }
+        Adaptor {
+            secret,
+            point: &secret * RISTRETTO_BASEPOINT_TABLE,
+        }
     }
 }
 
@@ -88,12 +91,18 @@ fn challenge(nonce_point: &RistrettoPoint, key: &RistrettoPoint, message: &[u8])
 
 /// Sign in a way that only the holder of the adaptor's secret can finish.
 pub fn pre_sign<R: RngCore + CryptoRng>(
-    signing_key: &Scalar, adaptor_point: &RistrettoPoint, message: &[u8], rng: &mut R,
+    signing_key: &Scalar,
+    adaptor_point: &RistrettoPoint,
+    message: &[u8],
+    rng: &mut R,
 ) -> PreSignature {
     let r = Scalar::random(rng);
     let nonce = &r * RISTRETTO_BASEPOINT_TABLE;
     let c = challenge(&(nonce + adaptor_point), &public_key(signing_key), message);
-    PreSignature { r: nonce, s: r + c * signing_key }
+    PreSignature {
+        r: nonce,
+        s: r + c * signing_key,
+    }
 }
 
 /// Check a pre-signature before relying on it.
@@ -103,8 +112,10 @@ pub fn pre_sign<R: RngCore + CryptoRng>(
 /// the protocol safe against a counterparty who sends nonsense: without it, the
 /// first leg is prepared against a pre-signature that never adapts.
 pub fn verify_pre_signature(
-    key: &RistrettoPoint, adaptor_point: &RistrettoPoint,
-    message: &[u8], pre: &PreSignature,
+    key: &RistrettoPoint,
+    adaptor_point: &RistrettoPoint,
+    message: &[u8],
+    pre: &PreSignature,
 ) -> bool {
     let c = challenge(&(pre.r + adaptor_point), key, message);
     public_key(&pre.s) == pre.r + c * key
@@ -112,7 +123,10 @@ pub fn verify_pre_signature(
 
 /// Finish a pre-signature with the adaptor's secret.
 pub fn adapt(pre: &PreSignature, adaptor: &Adaptor) -> Signature {
-    Signature { r: pre.r + adaptor.point, s: pre.s + adaptor.secret }
+    Signature {
+        r: pre.r + adaptor.point,
+        s: pre.s + adaptor.secret,
+    }
 }
 
 /// Recover the secret from a published signature and the pre-signature it came
@@ -131,7 +145,9 @@ pub fn verify(key: &RistrettoPoint, message: &[u8], signature: &Signature) -> bo
 
 /// Sign with no adaptor, for callers that want the same verifier for both.
 pub fn sign<R: RngCore + CryptoRng>(
-    signing_key: &Scalar, message: &[u8], rng: &mut R,
+    signing_key: &Scalar,
+    message: &[u8],
+    rng: &mut R,
 ) -> Signature {
     let pre = pre_sign(signing_key, &RistrettoPoint::default(), message, rng);
     Signature { r: pre.r, s: pre.s }
@@ -185,10 +201,24 @@ mod tests {
     fn a_pre_signature_is_bound_to_its_message_and_its_adaptor() {
         let (x, key, adaptor) = setup();
         let pre = pre_sign(&x, &adaptor.point, b"leg", &mut OsRng);
-        assert!(!verify_pre_signature(&key, &adaptor.point, b"another leg", &pre));
-        assert!(!verify_pre_signature(&key, &Adaptor::random(&mut OsRng).point, b"leg", &pre));
-        assert!(!verify_pre_signature(&public_key(&Scalar::random(&mut OsRng)),
-                                      &adaptor.point, b"leg", &pre));
+        assert!(!verify_pre_signature(
+            &key,
+            &adaptor.point,
+            b"another leg",
+            &pre
+        ));
+        assert!(!verify_pre_signature(
+            &key,
+            &Adaptor::random(&mut OsRng).point,
+            b"leg",
+            &pre
+        ));
+        assert!(!verify_pre_signature(
+            &public_key(&Scalar::random(&mut OsRng)),
+            &adaptor.point,
+            b"leg",
+            &pre
+        ));
     }
 
     #[test]
@@ -198,8 +228,14 @@ mod tests {
         let mut rng = OsRng;
         let adaptor = Adaptor::random(&mut rng);
         let (alice, bob) = (Scalar::random(&mut rng), Scalar::random(&mut rng));
-        let a = adapt(&pre_sign(&alice, &adaptor.point, b"leg A", &mut rng), &adaptor);
-        let b = adapt(&pre_sign(&bob, &adaptor.point, b"leg B", &mut rng), &adaptor);
+        let a = adapt(
+            &pre_sign(&alice, &adaptor.point, b"leg A", &mut rng),
+            &adaptor,
+        );
+        let b = adapt(
+            &pre_sign(&bob, &adaptor.point, b"leg B", &mut rng),
+            &adaptor,
+        );
         assert_ne!(a.r, b.r);
         assert_ne!(a.s, b.s);
         assert_ne!(a.r - b.r, adaptor.point);

@@ -41,66 +41,99 @@ pub fn sample() -> Instruction {
 pub fn sample_with_quorum() -> (Instruction, frost::keys::PublicKeyPackage) {
     let mut rng = OsRng;
     let (secret, public) = deal_quorum(7, 3, &mut rng).expect("deal");
-    let shares: BTreeMap<_, _> = secret.into_iter()
+    let shares: BTreeMap<_, _> = secret
+        .into_iter()
         .map(|(id, share)| (id, frost::keys::KeyPackage::try_from(share).unwrap()))
         .collect();
     let issuer = Issuer::new(Pedersen::new(b"qomm:defmi:v1"), Bounds::default());
-    let (digest, _openings, partial) = issuer.build(
-        1_000, 99_500, 3,
-        RistrettoPoint::mul_base(&Scalar::from(11u64)),
-        RistrettoPoint::mul_base(&Scalar::from(12u64)),
-        1_800_000_000, [7u8; 32], 1_599_845, &mut rng).expect("issue");
+    let (digest, _openings, partial) = issuer
+        .build(
+            1_000,
+            99_500,
+            3,
+            RistrettoPoint::mul_base(&Scalar::from(11u64)),
+            RistrettoPoint::mul_base(&Scalar::from(12u64)),
+            1_800_000_000,
+            [7u8; 32],
+            1_599_845,
+            &mut rng,
+        )
+        .expect("issue");
 
     let chosen: Vec<_> = shares.keys().take(3).cloned().collect();
     let mut nonces = BTreeMap::new();
     let mut commitments = BTreeMap::new();
     for id in &chosen {
-        let (nonce, commitment) = frost::round1::commit(shares[id].signing_share(),
-                                                        &mut rng);
+        let (nonce, commitment) = frost::round1::commit(shares[id].signing_share(), &mut rng);
         nonces.insert(*id, nonce);
         commitments.insert(*id, commitment);
     }
     let package = frost::SigningPackage::new(commitments, &digest);
     let mut signature_shares = BTreeMap::new();
     for id in &chosen {
-        signature_shares.insert(*id, frost::round2::sign(&package, &nonces[id],
-                                                          &shares[id]).expect("sign"));
+        signature_shares.insert(
+            *id,
+            frost::round2::sign(&package, &nonces[id], &shares[id]).expect("sign"),
+        );
     }
-    let signature = frost::aggregate(&package, &signature_shares, &public)
-        .expect("aggregate");
+    let signature = frost::aggregate(&package, &signature_shares, &public).expect("aggregate");
     (partial.sealed(signature), public)
 }
 
-fn tagged(name: &'static str, bytes: Vec<u8>, accepts: bool, why: &'static str)
-    -> Vector
-{
+fn tagged(name: &'static str, bytes: Vec<u8>, accepts: bool, why: &'static str) -> Vector {
     let digest = fingerprint(&bytes);
-    Vector { name, bytes, digest, accepts, why }
+    Vector {
+        name,
+        bytes,
+        digest,
+        accepts,
+        why,
+    }
 }
 
 /// One fresh positive and the five negatives derived from it.
 pub fn build() -> Vec<Vector> {
     let good = encode(&sample());
-    let mut out = vec![tagged("accepted", good.clone(), true,
-                              "a signed instruction, as issued")];
+    let mut out = vec![tagged(
+        "accepted",
+        good.clone(),
+        true,
+        "a signed instruction, as issued",
+    )];
 
     let mut wrong_magic = good.clone();
     wrong_magic[0] = b'X';
-    out.push(tagged("wrong-magic", wrong_magic, false,
-                    "does not begin QOMMZKPI"));
+    out.push(tagged(
+        "wrong-magic",
+        wrong_magic,
+        false,
+        "does not begin QOMMZKPI",
+    ));
 
     let mut future = good.clone();
     future[MAGIC.len()..MAGIC.len() + 2].copy_from_slice(&(VERSION + 1).to_be_bytes());
-    out.push(tagged("unknown-version", future, false,
-                    "a version this build does not know --- refused, not guessed at"));
+    out.push(tagged(
+        "unknown-version",
+        future,
+        false,
+        "a version this build does not know --- refused, not guessed at",
+    ));
 
-    out.push(tagged("truncated", good[..good.len() - 1].to_vec(), false,
-                    "one byte short, which is not a shorter instruction"));
+    out.push(tagged(
+        "truncated",
+        good[..good.len() - 1].to_vec(),
+        false,
+        "one byte short, which is not a shorter instruction",
+    ));
 
     let mut trailing = good.clone();
     trailing.push(0);
-    out.push(tagged("trailing-byte", trailing, false,
-                    "one byte over, so it is a different message"));
+    out.push(tagged(
+        "trailing-byte",
+        trailing,
+        false,
+        "one byte over, so it is a different message",
+    ));
 
     let mut not_a_point = good.clone();
     // the first commitment starts right after magic and version, and 0xff...ff
@@ -108,8 +141,12 @@ pub fn build() -> Vec<Vector> {
     for byte in not_a_point[MAGIC.len() + 2..MAGIC.len() + 34].iter_mut() {
         *byte = 0xff;
     }
-    out.push(tagged("not-a-point", not_a_point, false,
-                    "a commitment that is not a group element"));
+    out.push(tagged(
+        "not-a-point",
+        not_a_point,
+        false,
+        "a commitment that is not a group element",
+    ));
 
     out
 }
@@ -122,9 +159,13 @@ pub fn check(bytes: &[u8]) -> Result<Vec<u8>, String> {
     let instruction = decode(bytes).map_err(|why| why.to_string())?;
     let again = encode(&instruction);
     if again != bytes {
-        return Err(format!("re-encoding gave {} bytes against {} --- the codec is \
+        return Err(format!(
+            "re-encoding gave {} bytes against {} --- the codec is \
                             not a fixed point, so two implementations would \
-                            disagree about what they read", again.len(), bytes.len()));
+                            disagree about what they read",
+            again.len(),
+            bytes.len()
+        ));
     }
     Ok(again)
 }

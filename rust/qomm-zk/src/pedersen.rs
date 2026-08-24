@@ -41,7 +41,10 @@ impl Pedersen {
     /// from the key, not to pick generators.
     pub fn new(_label: &[u8]) -> Self {
         let gens = PedersenGens::default();
-        Pedersen { g: gens.B, h: gens.B_blinding }
+        Pedersen {
+            g: gens.B,
+            h: gens.B_blinding,
+        }
     }
 
     /// A key on independently chosen generators, for uses that never meet a

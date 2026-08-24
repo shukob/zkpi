@@ -104,12 +104,24 @@ def verify_share(key: Pedersen, shares: ShareSet, party: int) -> bool:
 
 
 class JointNonce:
-    """Randomness for the proof that no single node knows.
+    """Randomness for a proof that no single node knows.
 
-    Every node deals a random polynomial and the shares are summed, so the nonce
-    is the sum of every contribution. A node that biases its own contribution
-    still cannot choose the result unless it is the last to speak and everyone
-    else is corrupt.
+    Each node contributes one random polynomial and the shares are summed.
+
+    **What that does and does not establish.** Summing means no node knows the
+    result from its own contribution alone. It does not by itself stop a node
+    that contributes *after* seeing the others: knowing their sum `K`, a node
+    that wants the nonce to be `t` contributes `t - K`, and then it knows the
+    nonce, and a known nonce gives up the witness through `z = k + c*w`. What
+    rules that out is that at least one honest contribution is still unknown
+    when a node fixes its own --- private dealing, or commit-then-open, or a
+    distributed key generation. This class sums locally and models the *output*
+    of such a protocol; it is not that protocol.
+
+    An earlier note here said a node could only choose the result if it spoke
+    last *and everyone else was corrupt*. The second half is wrong: speaking
+    last and being able to see the others is enough, and honest contributions
+    that are already public are no protection.
     """
 
     def __init__(self, key: Pedersen, parties: Sequence[int], threshold: int):

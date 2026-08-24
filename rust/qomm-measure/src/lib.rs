@@ -36,24 +36,40 @@ pub struct Summary {
 
 impl Summary {
     pub fn of(samples: &[f64]) -> Option<Summary> {
-        if samples.is_empty() { return None; }
+        if samples.is_empty() {
+            return None;
+        }
         let n = samples.len();
         let mean = samples.iter().sum::<f64>() / n as f64;
         let sd = if n > 1 {
             let var = samples.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (n - 1) as f64;
             Some(var.sqrt())
-        } else { None };
+        } else {
+            None
+        };
         let mut sorted = samples.to_vec();
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let median = if n % 2 == 1 { sorted[n / 2] }
-                     else { 0.5 * (sorted[n / 2 - 1] + sorted[n / 2]) };
-        Some(Summary { n, mean, sd, median, min: sorted[0], max: sorted[n - 1] })
+        let median = if n % 2 == 1 {
+            sorted[n / 2]
+        } else {
+            0.5 * (sorted[n / 2 - 1] + sorted[n / 2])
+        };
+        Some(Summary {
+            n,
+            mean,
+            sd,
+            median,
+            min: sorted[0],
+            max: sorted[n - 1],
+        })
     }
 
     /// The spread as a fraction of the mean. Above a few percent, the last digit
     /// of the mean is not real.
     pub fn rsd(&self) -> Option<f64> {
-        self.sd.filter(|_| self.mean != 0.0).map(|sd| sd / self.mean)
+        self.sd
+            .filter(|_| self.mean != 0.0)
+            .map(|sd| sd / self.mean)
     }
 
     /// Whether this measurement sits below another with daylight between them.
@@ -71,10 +87,17 @@ impl Summary {
             Some(x) => format!("{x:.6}"),
             None => "null".to_string(),
         };
-        format!("{{\"n\": {}, \"mean\": {:.6}, \"sd\": {}, \"median\": {:.6}, \
+        format!(
+            "{{\"n\": {}, \"mean\": {:.6}, \"sd\": {}, \"median\": {:.6}, \
                  \"min\": {:.6}, \"max\": {:.6}, \"rsd\": {}}}",
-                self.n, self.mean, opt(self.sd), self.median,
-                self.min, self.max, opt(self.rsd()))
+            self.n,
+            self.mean,
+            opt(self.sd),
+            self.median,
+            self.min,
+            self.max,
+            opt(self.rsd())
+        )
     }
 }
 
@@ -83,7 +106,11 @@ impl fmt::Display for Summary {
         let places = f.precision().unwrap_or(2);
         match self.sd {
             None => write!(f, "{:.*} (n=1)", places, self.mean),
-            Some(sd) => write!(f, "{:.*} ± {:.*} (n={})", places, self.mean, places, sd, self.n),
+            Some(sd) => write!(
+                f,
+                "{:.*} ± {:.*} (n={})",
+                places, self.mean, places, sd, self.n
+            ),
         }
     }
 }
@@ -93,7 +120,9 @@ impl fmt::Display for Summary {
 pub struct Exact(pub u64);
 
 impl Exact {
-    pub fn json(&self) -> String { format!("{{\"exact\": {}}}", self.0) }
+    pub fn json(&self) -> String {
+        format!("{{\"exact\": {}}}", self.0)
+    }
 }
 
 impl fmt::Display for Exact {

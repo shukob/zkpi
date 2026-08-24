@@ -82,7 +82,10 @@ impl Identity {
         hasher.update((venue.len() as u64).to_be_bytes());
         hasher.update(venue);
         let secret = Scalar::from_bytes_mod_order_wide(&hasher.finalize().into());
-        Handle { point: &secret * RISTRETTO_BASEPOINT_TABLE, secret }
+        Handle {
+            point: &secret * RISTRETTO_BASEPOINT_TABLE,
+            secret,
+        }
     }
 }
 
@@ -110,9 +113,14 @@ mod tests {
     #[test]
     fn the_same_venue_gives_the_same_handle_back() {
         let firm = Identity::from_seed([7u8; 32]);
-        assert_eq!(firm.handle(b"venue-jpy").point, firm.handle(b"venue-jpy").point);
-        assert_eq!(Identity::from_seed([7u8; 32]).handle(b"v").point,
-                   firm.handle(b"v").point);
+        assert_eq!(
+            firm.handle(b"venue-jpy").point,
+            firm.handle(b"venue-jpy").point
+        );
+        assert_eq!(
+            Identity::from_seed([7u8; 32]).handle(b"v").point,
+            firm.handle(b"v").point
+        );
     }
 
     #[test]
@@ -132,12 +140,18 @@ mod tests {
 
         // the trap
         let a = Scalar::random(&mut OsRng);
-        let (bad_a, bad_b) = (&(a * fa) * RISTRETTO_BASEPOINT_TABLE,
-                              &(a * fb) * RISTRETTO_BASEPOINT_TABLE);
+        let (bad_a, bad_b) = (
+            &(a * fa) * RISTRETTO_BASEPOINT_TABLE,
+            &(a * fb) * RISTRETTO_BASEPOINT_TABLE,
+        );
         let other = Scalar::random(&mut OsRng);
         let bad_other = &(other * fb) * RISTRETTO_BASEPOINT_TABLE;
         assert_eq!(bad_a * fb, bad_b * fa, "same firm, and anyone can tell");
-        assert_ne!(bad_a * fb, bad_other * fa, "different firms, and anyone can tell");
+        assert_ne!(
+            bad_a * fb,
+            bad_other * fa,
+            "different firms, and anyone can tell"
+        );
 
         // what is actually used: the same test says nothing
         let firm = Identity::new(&mut OsRng);

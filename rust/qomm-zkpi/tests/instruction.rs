@@ -29,14 +29,17 @@ fn sign(q: &Quorum, message: &[u8], signers: usize, rng: &mut OsRng) -> frost::S
     try_sign(q, message, signers, rng).expect("aggregate")
 }
 
-fn try_sign(q: &Quorum, message: &[u8], signers: usize, rng: &mut OsRng)
-    -> Result<frost::Signature, ()> {
+fn try_sign(
+    q: &Quorum,
+    message: &[u8],
+    signers: usize,
+    rng: &mut OsRng,
+) -> Result<frost::Signature, ()> {
     let chosen: Vec<_> = q.shares.keys().take(signers).cloned().collect();
     let mut nonces = BTreeMap::new();
     let mut commitments = BTreeMap::new();
     for id in &chosen {
-        let (nonce, commitment) =
-            frost::round1::commit(q.shares[id].signing_share(), rng);
+        let (nonce, commitment) = frost::round1::commit(q.shares[id].signing_share(), rng);
         nonces.insert(*id, nonce);
         commitments.insert(*id, commitment);
     }
@@ -44,29 +47,44 @@ fn try_sign(q: &Quorum, message: &[u8], signers: usize, rng: &mut OsRng)
     let mut shares = BTreeMap::new();
     for id in &chosen {
         // round 2 already refuses a package that names too few signers
-        let share = frost::round2::sign(&package, &nonces[id], &q.shares[id])
-            .map_err(|_| ())?;
+        let share = frost::round2::sign(&package, &nonces[id], &q.shares[id]).map_err(|_| ())?;
         shares.insert(*id, share);
     }
     frost::aggregate(&package, &shares, &q.public).map_err(|_| ())
 }
 
-fn issue(rng: &mut OsRng, q: &Quorum, amount: u64, price: u64, deadline: u64)
-    -> (qomm_zkpi::Instruction, qomm_zkpi::Openings) {
+fn issue(
+    rng: &mut OsRng,
+    q: &Quorum,
+    amount: u64,
+    price: u64,
+    deadline: u64,
+) -> (qomm_zkpi::Instruction, qomm_zkpi::Openings) {
     let key = Pedersen::new(b"qomm:defmi:v1");
     let issuer = Issuer::new(key, Bounds::default());
     let (digest, openings, partial) = issuer
-        .build(amount, price, 3,
-               RistrettoPoint::mul_base(&Scalar::from(11u64)),
-               RistrettoPoint::mul_base(&Scalar::from(22u64)),
-               deadline, [7u8; 32], 1_599_845, rng)
+        .build(
+            amount,
+            price,
+            3,
+            RistrettoPoint::mul_base(&Scalar::from(11u64)),
+            RistrettoPoint::mul_base(&Scalar::from(22u64)),
+            deadline,
+            [7u8; 32],
+            1_599_845,
+            rng,
+        )
         .expect("build");
     let signature = sign(q, &digest, THRESHOLD as usize, rng);
     (partial.sealed(signature), openings)
 }
 
 fn venue(q: &Quorum) -> Venue {
-    Venue::new(Pedersen::new(b"qomm:defmi:v1"), &Bounds::default(), q.public.clone())
+    Venue::new(
+        Pedersen::new(b"qomm:defmi:v1"),
+        &Bounds::default(),
+        q.public.clone(),
+    )
 }
 
 #[test]
@@ -96,7 +114,10 @@ fn an_expired_instruction_is_refused() {
     let mut rng = OsRng;
     let q = quorum(&mut rng);
     let (instruction, _) = issue(&mut rng, &q, 100, 99_990, 1_500);
-    assert_eq!(venue(&q).verify(&instruction, 2_000), Err("past the deadline"));
+    assert_eq!(
+        venue(&q).verify(&instruction, 2_000),
+        Err("past the deadline")
+    );
 }
 
 #[test]
@@ -105,8 +126,10 @@ fn a_tampered_field_breaks_the_signature() {
     let q = quorum(&mut rng);
     let (mut instruction, _) = issue(&mut rng, &q, 100, 99_990, 1_500);
     instruction.quote_key += 1;
-    assert_eq!(venue(&q).verify(&instruction, 1_000),
-               Err("the quorum signature does not verify"));
+    assert_eq!(
+        venue(&q).verify(&instruction, 1_000),
+        Err("the quorum signature does not verify")
+    );
 }
 
 #[test]
@@ -146,10 +169,17 @@ fn an_amount_outside_the_published_bounds_cannot_be_issued() {
     let mut rng = OsRng;
     let issuer = Issuer::new(Pedersen::new(b"qomm:defmi:v1"), Bounds::default());
     assert!(issuer
-        .build(1u64 << 40, 99_990, 3,
-               RistrettoPoint::mul_base(&Scalar::from(11u64)),
-               RistrettoPoint::mul_base(&Scalar::from(22u64)),
-               1_500, [7u8; 32], 1, &mut rng)
+        .build(
+            1u64 << 40,
+            99_990,
+            3,
+            RistrettoPoint::mul_base(&Scalar::from(11u64)),
+            RistrettoPoint::mul_base(&Scalar::from(22u64)),
+            1_500,
+            [7u8; 32],
+            1,
+            &mut rng
+        )
         .is_err());
 }
 
@@ -167,9 +197,11 @@ fn a_deadline_beyond_the_venues_horizon_is_refused() {
     let bounds = Bounds::default();
     let far = 1_000 + bounds.max_horizon + 1;
     let (instruction, _) = issue(&mut rng, &q, 100, 99_990, far);
-    assert_eq!(venue(&q).verify(&instruction, 1_000),
-               Err("the deadline is further out than this venue will hold a \
-nullifier for"));
+    assert_eq!(
+        venue(&q).verify(&instruction, 1_000),
+        Err("the deadline is further out than this venue will hold a \
+nullifier for")
+    );
 }
 
 #[test]
@@ -189,10 +221,11 @@ fn a_deadline_inside_the_horizon_is_accepted() {
 fn a_width_bulletproofs_does_not_take_is_refused_at_construction() {
     // The library takes 8, 16, 32 or 64. Asking for anything else is a
     // programming error and should be one loudly.
-    let result = std::panic::catch_unwind(|| {
-        qomm_zk::range::RangeCtx::new(24, 1)
-    });
-    assert!(result.is_err(), "a width bulletproofs cannot prove was accepted");
+    let result = std::panic::catch_unwind(|| qomm_zk::range::RangeCtx::new(24, 1));
+    assert!(
+        result.is_err(),
+        "a width bulletproofs cannot prove was accepted"
+    );
 }
 
 /// A payment from a handle to itself moves nothing and burns a nullifier.
@@ -203,11 +236,15 @@ fn a_payment_to_oneself_is_refused() {
     let handle = RistrettoPoint::mul_base(&Scalar::from(11u64));
     let issuer = Issuer::new(Pedersen::new(b"qomm:zkpi:v1"), Bounds::default());
     let (digest, _, partial) = issuer
-        .build(100, 99_990, 3, handle, handle, 1_500, [7u8; 32], 1_599_845, &mut rng)
+        .build(
+            100, 99_990, 3, handle, handle, 1_500, [7u8; 32], 1_599_845, &mut rng,
+        )
         .unwrap();
     let instruction = partial.sealed(sign(&q, &digest, 3, &mut rng));
-    assert_eq!(venue(&q).verify(&instruction, 1_000),
-               Err("the payer and the payee are the same handle"));
+    assert_eq!(
+        venue(&q).verify(&instruction, 1_000),
+        Err("the payer and the payee are the same handle")
+    );
 }
 
 /// A signature made for one venue must not settle at another. The domain is in
@@ -219,8 +256,10 @@ fn an_instruction_does_not_carry_to_another_venue() {
     let (instruction, _) = issue(&mut rng, &q, 100, 99_990, 1_500);
     let mut elsewhere = venue(&q);
     elsewhere.domain = b"qomm:some-other-rail".to_vec();
-    assert!(elsewhere.verify(&instruction, 1_000).is_err(),
-            "an instruction signed for one venue settled at another");
+    assert!(
+        elsewhere.verify(&instruction, 1_000).is_err(),
+        "an instruction signed for one venue settled at another"
+    );
 }
 
 /// A quorum nobody dealt. `deal_quorum` hands every secret share to one caller,
@@ -229,16 +268,22 @@ fn an_instruction_does_not_carry_to_another_venue() {
 #[test]
 fn a_dkg_quorum_signs_an_instruction_with_no_dealer() {
     let mut rng = OsRng;
-    let (packages, public) = qomm_zkpi::distributed_key_generation(7, 3, &mut rng)
-        .expect("dkg");
+    let (packages, public) = qomm_zkpi::distributed_key_generation(7, 3, &mut rng).expect("dkg");
     assert_eq!(packages.len(), 7);
 
     let issuer = Issuer::new(Pedersen::new(b"qomm:zkpi:v1"), Bounds::default());
     let (digest, _, partial) = issuer
-        .build(100, 99_990, 3,
-               RistrettoPoint::mul_base(&Scalar::from(11u64)),
-               RistrettoPoint::mul_base(&Scalar::from(22u64)),
-               1_500, [7u8; 32], 1_599_845, &mut rng)
+        .build(
+            100,
+            99_990,
+            3,
+            RistrettoPoint::mul_base(&Scalar::from(11u64)),
+            RistrettoPoint::mul_base(&Scalar::from(22u64)),
+            1_500,
+            [7u8; 32],
+            1_599_845,
+            &mut rng,
+        )
         .unwrap();
 
     let chosen: Vec<_> = packages.keys().take(3).cloned().collect();
@@ -251,17 +296,17 @@ fn a_dkg_quorum_signs_an_instruction_with_no_dealer() {
     let package = frost::SigningPackage::new(commitments, &digest);
     let mut shares = BTreeMap::new();
     for id in &chosen {
-        shares.insert(*id,
-            frost::round2::sign(&package, &nonces[id], &packages[id]).unwrap());
+        shares.insert(
+            *id,
+            frost::round2::sign(&package, &nonces[id], &packages[id]).unwrap(),
+        );
     }
     let signature = frost::aggregate(&package, &shares, &public).unwrap();
     let instruction = partial.sealed(signature);
 
-    let mut venue = Venue::new(Pedersen::new(b"qomm:zkpi:v1"), &Bounds::default(),
-                               public);
+    let venue = Venue::new(Pedersen::new(b"qomm:zkpi:v1"), &Bounds::default(), public);
     assert_eq!(venue.verify(&instruction, 1_000), Ok(()));
 }
-
 
 /// A narrow amount beside a wide price is worth what it says.
 ///
@@ -272,34 +317,53 @@ fn a_dkg_quorum_signs_an_instruction_with_no_dealer() {
 fn each_field_is_proved_at_its_own_width() {
     let mut rng = OsRng;
     let q = quorum(&mut rng);
-    let bounds = Bounds { amount_bits: 16, price_bits: 32, ..Bounds::default() };
+    let bounds = Bounds {
+        amount_bits: 16,
+        price_bits: 32,
+        ..Bounds::default()
+    };
     let issuer = Issuer::new(Pedersen::new(b"qomm:zkpi:v1"), bounds.clone());
 
     // inside 16 bits, and inside 32
     let (digest, _, partial) = issuer
-        .build(1_000, 99_990, 3,
-               RistrettoPoint::mul_base(&Scalar::from(11u64)),
-               RistrettoPoint::mul_base(&Scalar::from(22u64)),
-               1_500, [7u8; 32], 1_599_845, &mut rng)
+        .build(
+            1_000,
+            99_990,
+            3,
+            RistrettoPoint::mul_base(&Scalar::from(11u64)),
+            RistrettoPoint::mul_base(&Scalar::from(22u64)),
+            1_500,
+            [7u8; 32],
+            1_599_845,
+            &mut rng,
+        )
         .unwrap();
     let instruction = partial.sealed(sign(&q, &digest, 3, &mut rng));
-    let mut venue = Venue::new(Pedersen::new(b"qomm:zkpi:v1"), &bounds, q.public.clone());
+    let venue = Venue::new(Pedersen::new(b"qomm:zkpi:v1"), &bounds, q.public.clone());
     assert_eq!(venue.verify(&instruction, 1_000), Ok(()));
 
     // an amount that needs 17 bits: inside the price's width and outside its own
-    let wide = issuer.build(70_000, 99_990, 3,
-                            RistrettoPoint::mul_base(&Scalar::from(11u64)),
-                            RistrettoPoint::mul_base(&Scalar::from(22u64)),
-                            1_500, [8u8; 32], 1_599_845, &mut rng);
+    let wide = issuer.build(
+        70_000,
+        99_990,
+        3,
+        RistrettoPoint::mul_base(&Scalar::from(11u64)),
+        RistrettoPoint::mul_base(&Scalar::from(22u64)),
+        1_500,
+        [8u8; 32],
+        1_599_845,
+        &mut rng,
+    );
     match wide {
-        Err(_) => {}                       // the prover refuses, which is fine
+        Err(_) => {} // the prover refuses, which is fine
         Ok((digest, _, partial)) => {
             let instruction = partial.sealed(sign(&q, &digest, 3, &mut rng));
-            let mut venue = Venue::new(Pedersen::new(b"qomm:zkpi:v1"), &bounds,
-                                       q.public.clone());
-            assert_eq!(venue.verify(&instruction, 1_000),
-                       Err("the amount is outside the published bounds"),
-                       "an amount past its own width passed at the price's width");
+            let venue = Venue::new(Pedersen::new(b"qomm:zkpi:v1"), &bounds, q.public.clone());
+            assert_eq!(
+                venue.verify(&instruction, 1_000),
+                Err("the amount is outside the published bounds"),
+                "an amount past its own width passed at the price's width"
+            );
         }
     }
 }

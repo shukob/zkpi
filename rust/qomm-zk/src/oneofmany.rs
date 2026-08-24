@@ -41,17 +41,56 @@ impl GkProof {
 }
 
 fn challenge(
-    transcript: &mut Transcript, cl: &[RistrettoPoint], ca: &[RistrettoPoint],
-    cb: &[RistrettoPoint], gk: &[RistrettoPoint],
+    transcript: &mut Transcript,
+    commitments: &[RistrettoPoint],
+    cl: &[RistrettoPoint],
+    ca: &[RistrettoPoint],
+    cb: &[RistrettoPoint],
+    gk: &[RistrettoPoint],
 ) -> Scalar {
     transcript.append_message(b"dom", b"qomm/gk");
-    for (label, set) in [(&b"cl"[..], cl), (&b"ca"[..], ca), (&b"cb"[..], cb), (&b"gk"[..], gk)] {
+    // The set the proof is *about* goes in first. It used not to, and the
+    // commitments then entered only through the final weighted sum
+    // `sum_i p_i(x) C_i` --- so an attacker could move mass between two members
+    // and leave that sum where it was: pick j and k with `p_k != 0`, add D to
+    // C_j and subtract `(p_j/p_k) D` from C_k. The challenge did not depend on
+    // the set, so it did not move either, and a proof about one set verified
+    // against a set its prover had no witness in.
+    //
+    // Callers could bind the set in their own transcript and `vetting.rs`
+    // does. Relying on every caller to remember is the wrong place for the
+    // requirement: the proof is a statement about this set, so this is where
+    // the set belongs.
+    for (label, set) in [
+        (&b"C"[..], commitments),
+        (&b"cl"[..], cl),
+        (&b"ca"[..], ca),
+        (&b"cb"[..], cb),
+        (&b"gk"[..], gk),
+    ] {
         transcript.append_u64(b"n", set.len() as u64);
         for point in set {
             transcript.append_message(label, point.compress().as_bytes());
         }
     }
     transcript.challenge_scalar(b"x")
+}
+
+/// The challenge a verifier will derive, for a test that needs to predict it.
+#[doc(hidden)]
+pub fn challenge_for(
+    transcript: &mut Transcript,
+    commitments: &[RistrettoPoint],
+    proof: &GkProof,
+) -> Scalar {
+    challenge(
+        transcript,
+        commitments,
+        &proof.cl,
+        &proof.ca,
+        &proof.cb,
+        &proof.gk,
+    )
 }
 
 /// Coefficients of `p_i(x) = prod_j f_{j, i_j}` as a polynomial in x.
@@ -77,8 +116,12 @@ fn poly_coefficients(index: usize, bits: usize, a: &[Scalar], ell: &[Scalar]) ->
 }
 
 pub fn prove<R: RngCore + CryptoRng>(
-    key: &Pedersen, transcript: &mut Transcript, commitments: &[RistrettoPoint],
-    index: usize, randomness: &Scalar, rng: &mut R,
+    key: &Pedersen,
+    transcript: &mut Transcript,
+    commitments: &[RistrettoPoint],
+    index: usize,
+    randomness: &Scalar,
+    rng: &mut R,
 ) -> Result<GkProof, &'static str> {
     let size = commitments.len();
     if !size.is_power_of_two() || size < 2 {
@@ -90,7 +133,13 @@ pub fn prove<R: RngCore + CryptoRng>(
     let bits = size.trailing_zeros() as usize;
 
     let ell: Vec<Scalar> = (0..bits)
-        .map(|j| if (index >> j) & 1 == 1 { Scalar::ONE } else { Scalar::ZERO })
+        .map(|j| {
+            if (index >> j) & 1 == 1 {
+                Scalar::ONE
+            } else {
+                Scalar::ZERO
+            }
+        })
         .collect();
     let a: Vec<Scalar> = (0..bits).map(|_| Scalar::random(rng)).collect();
     let r: Vec<Scalar> = (0..bits).map(|_| Scalar::random(rng)).collect();
@@ -99,10 +148,13 @@ pub fn prove<R: RngCore + CryptoRng>(
 
     let cl: Vec<_> = (0..bits).map(|j| key.commit(&ell[j], &r[j])).collect();
     let ca: Vec<_> = (0..bits).map(|j| key.commit(&a[j], &s[j])).collect();
-    let cb: Vec<_> = (0..bits).map(|j| key.commit(&(ell[j] * a[j]), &t[j])).collect();
+    let cb: Vec<_> = (0..bits)
+        .map(|j| key.commit(&(ell[j] * a[j]), &t[j]))
+        .collect();
 
-    let coefficients: Vec<Vec<Scalar>> =
-        (0..size).map(|i| poly_coefficients(i, bits, &a, &ell)).collect();
+    let coefficients: Vec<Vec<Scalar>> = (0..size)
+        .map(|i| poly_coefficients(i, bits, &a, &ell))
+        .collect();
 
     let rho: Vec<Scalar> = (0..bits).map(|_| Scalar::random(rng)).collect();
     let gk: Vec<RistrettoPoint> = (0..bits)
@@ -112,36 +164,62 @@ pub fn prove<R: RngCore + CryptoRng>(
         })
         .collect();
 
-    let x = challenge(transcript, &cl, &ca, &cb, &gk);
+    let x = challenge(transcript, commitments, &cl, &ca, &cb, &gk);
     let f: Vec<Scalar> = (0..bits).map(|j| ell[j] * x + a[j]).collect();
     let za: Vec<Scalar> = (0..bits).map(|j| r[j] * x + s[j]).collect();
     let zb: Vec<Scalar> = (0..bits).map(|j| r[j] * (x - f[j]) + t[j]).collect();
 
     let mut x_to_bits = Scalar::ONE;
-    for _ in 0..bits { x_to_bits *= x; }
+    for _ in 0..bits {
+        x_to_bits *= x;
+    }
     let mut zd = randomness * x_to_bits;
     let mut x_k = Scalar::ONE;
     for rho_k in rho.iter() {
         zd -= rho_k * x_k;
         x_k *= x;
     }
-    Ok(GkProof { cl, ca, cb, gk, f, za, zb, zd })
+    Ok(GkProof {
+        cl,
+        ca,
+        cb,
+        gk,
+        f,
+        za,
+        zb,
+        zd,
+    })
 }
 
 pub fn verify(
-    key: &Pedersen, transcript: &mut Transcript, commitments: &[RistrettoPoint],
+    key: &Pedersen,
+    transcript: &mut Transcript,
+    commitments: &[RistrettoPoint],
     proof: &GkProof,
 ) -> bool {
     let size = commitments.len();
-    if !size.is_power_of_two() || size < 2 { return false; }
+    if !size.is_power_of_two() || size < 2 {
+        return false;
+    }
     let bits = size.trailing_zeros() as usize;
-    if proof.f.len() != bits || proof.cl.len() != bits || proof.ca.len() != bits
-        || proof.cb.len() != bits || proof.gk.len() != bits
-        || proof.za.len() != bits || proof.zb.len() != bits
+    if proof.f.len() != bits
+        || proof.cl.len() != bits
+        || proof.ca.len() != bits
+        || proof.cb.len() != bits
+        || proof.gk.len() != bits
+        || proof.za.len() != bits
+        || proof.zb.len() != bits
     {
         return false;
     }
-    let x = challenge(transcript, &proof.cl, &proof.ca, &proof.cb, &proof.gk);
+    let x = challenge(
+        transcript,
+        commitments,
+        &proof.cl,
+        &proof.ca,
+        &proof.cb,
+        &proof.gk,
+    );
 
     for j in 0..bits {
         if key.commit(&proof.f[j], &proof.za[j]) != proof.cl[j] * x + proof.ca[j] {
@@ -155,13 +233,17 @@ pub fn verify(
     // The O(N) term, as one multiscalar multiplication rather than N of them.
     let mut scalars: Vec<Scalar> = Vec::with_capacity(size + bits + 1);
     let mut points: Vec<RistrettoPoint> = Vec::with_capacity(size + bits + 1);
-    for i in 0..size {
+    for (i, commitment) in commitments.iter().enumerate() {
         let mut value = Scalar::ONE;
         for j in 0..bits {
-            value *= if (i >> j) & 1 == 1 { proof.f[j] } else { x - proof.f[j] };
+            value *= if (i >> j) & 1 == 1 {
+                proof.f[j]
+            } else {
+                x - proof.f[j]
+            };
         }
         scalars.push(value);
-        points.push(commitments[i]);
+        points.push(*commitment);
     }
     let mut x_k = Scalar::ONE;
     for gk in proof.gk.iter() {

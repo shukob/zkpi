@@ -25,8 +25,7 @@ fn map_path() -> PathBuf {
             return PathBuf::from(path);
         }
     }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../scripts/host_map.txt")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scripts/host_map.txt")
 }
 
 /// Every machine the local table names, or none.
@@ -63,7 +62,8 @@ pub fn label(node: &str) -> String {
 /// The lookup itself: exact first, then without a domain, then unchanged.
 pub fn lookup(table: &BTreeMap<String, String>, node: &str) -> String {
     let short = node.split('.').next().unwrap_or(node);
-    table.get(node)
+    table
+        .get(node)
         .or_else(|| table.get(short))
         .cloned()
         .unwrap_or_else(|| node.to_string())
@@ -83,7 +83,9 @@ pub fn this_host() -> String {
 }
 
 fn node_name() -> String {
-    std::process::Command::new("hostname").output().ok()
+    std::process::Command::new("hostname")
+        .output()
+        .ok()
         .filter(|out| out.status.success())
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
         .filter(|name| !name.is_empty())
@@ -101,13 +103,18 @@ mod tests {
     /// Written with `std` rather than `tempfile`: this crate has no
     /// dependencies, which is worth more than the few lines that would save.
     fn fixture(tag: &str) -> PathBuf {
-        let path = std::env::temp_dir()
-            .join(format!("qomm-host-map-{}-{}.txt", std::process::id(), tag));
-        std::fs::write(&path, concat!(
-            "# a comment, and a blank line follows\n",
-            "\n",
-            "grinder      site-one   # trailing comment\n",
-            "kettle.local site-two\n")).unwrap();
+        let path =
+            std::env::temp_dir().join(format!("qomm-host-map-{}-{}.txt", std::process::id(), tag));
+        std::fs::write(
+            &path,
+            concat!(
+                "# a comment, and a blank line follows\n",
+                "\n",
+                "grinder      site-one   # trailing comment\n",
+                "kettle.local site-two\n"
+            ),
+        )
+        .unwrap();
         path
     }
 
@@ -131,7 +138,10 @@ mod tests {
     fn an_unknown_machine_keeps_its_name() {
         let path = fixture("unknown");
         let table = labels_from(&path);
-        assert_eq!(lookup(&table, "somebody-elses-laptop"), "somebody-elses-laptop");
+        assert_eq!(
+            lookup(&table, "somebody-elses-laptop"),
+            "somebody-elses-laptop"
+        );
         let _ = std::fs::remove_file(&path);
     }
 

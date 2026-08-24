@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Measure the proof that the opened quote is correct, and check it rejects forgeries.
 
-Also measures the joint path: the same proof assembled by a quorum of computing
-nodes from shares, so no node holds the witness.
+Also measures the joint path --- which is *not* the same proof. It deals a single
+scalar to the nodes and assembles one Pedersen opening from a quorum, so no node
+holds that witness. The quote proof's product and bit steps share the linearity
+that makes this work; its range proofs do not, because a range proof commits to
+each bit of the value and extracting bits needs the value. Assembling the whole
+proof from shares is an open problem, and these figures are a lower bound on it.
 """
 
 from __future__ import annotations
@@ -189,7 +193,13 @@ def forgery_controls(group) -> list[dict]:
 
 
 def joint_path(group, nodes: int, threshold: int, quorums) -> list[dict]:
-    """The same proof, assembled from shares by a quorum of computing nodes."""
+    """One Pedersen opening, assembled from shares by a quorum.
+
+    Not the quote proof. A single scalar is dealt to the nodes and one opening
+    proof is assembled from a quorum of them, which is the piece of the
+    construction the algebra permits --- see the module note for what it does
+    not reach.
+    """
     key = Pedersen(group)
     parties = list(range(1, nodes + 1))
     value, blinding = 123_456, key.random_blinding()

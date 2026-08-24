@@ -14,8 +14,8 @@ use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use rand::Rng;
 
-const DEGREE: usize = 2;          // T = 2
-const PRODUCT_DEGREE: usize = 4;  // 2T, a product before degree reduction
+const DEGREE: usize = 2; // T = 2
+const PRODUCT_DEGREE: usize = 4; // 2T, a product before degree reduction
 
 fn corrupt(shares: &mut [Scalar], who: &[usize]) {
     let mut rng = OsRng;
@@ -28,13 +28,21 @@ fn corrupt(shares: &mut [Scalar], who: &[usize]) {
 
 #[test]
 fn seven_nodes_at_threshold_two_sit_exactly_at_the_capacity() {
-    assert_eq!(capacity(7, DEGREE), 2, "and that coincidence is the finding");
+    assert_eq!(
+        capacity(7, DEGREE),
+        2,
+        "and that coincidence is the finding"
+    );
 }
 
 #[test]
 fn a_product_before_degree_reduction_is_one_short_at_seven() {
     assert_eq!(capacity(7, PRODUCT_DEGREE), 1);
-    assert_eq!(capacity(9, PRODUCT_DEGREE), 2, "which is the entire reason for nine");
+    assert_eq!(
+        capacity(9, PRODUCT_DEGREE),
+        2,
+        "which is the entire reason for nine"
+    );
 }
 
 // --- the honest path ------------------------------------------------------
@@ -47,8 +55,13 @@ fn an_untouched_sharing_decodes_to_the_secret_and_names_nobody() {
         let secret = Scalar::from(secret);
         let shares = share(&secret, DEGREE, &points, &mut rng);
         assert_eq!(reconstruct(&points[..3], &shares[..3]), secret);
-        assert_eq!(locate(&points, &shares, DEGREE),
-                   Verdict::Decoded { secret, culprits: Vec::new() });
+        assert_eq!(
+            locate(&points, &shares, DEGREE),
+            Verdict::Decoded {
+                secret,
+                culprits: Vec::new()
+            }
+        );
     }
 }
 
@@ -62,9 +75,14 @@ fn one_wrong_share_is_corrected_and_its_sender_named() {
     for who in 0..7 {
         let mut shares = share(&secret, DEGREE, &points, &mut rng);
         corrupt(&mut shares, &[who]);
-        assert_eq!(locate(&points, &shares, DEGREE),
-                   Verdict::Decoded { secret, culprits: vec![who] },
-                   "party {who}");
+        assert_eq!(
+            locate(&points, &shares, DEGREE),
+            Verdict::Decoded {
+                secret,
+                culprits: vec![who]
+            },
+            "party {who}"
+        );
     }
 }
 
@@ -80,8 +98,14 @@ fn two_wrong_shares_are_corrected_and_both_named() {
         who.sort_unstable();
         let mut shares = share(&secret, DEGREE, &points, &mut rng);
         corrupt(&mut shares, &who);
-        assert_eq!(locate(&points, &shares, DEGREE),
-                   Verdict::Decoded { secret, culprits: who.clone() }, "{who:?}");
+        assert_eq!(
+            locate(&points, &shares, DEGREE),
+            Verdict::Decoded {
+                secret,
+                culprits: who.clone()
+            },
+            "{who:?}"
+        );
     }
 }
 
@@ -115,8 +139,14 @@ fn the_decoder_never_names_an_innocent_party() {
         let secret = Scalar::from(rng.gen_range(1u64..1_000_000));
         let mut shares = share(&secret, DEGREE, &points, &mut rng);
         corrupt(&mut shares, &who);
-        assert_eq!(locate(&points, &shares, DEGREE),
-                   Verdict::Decoded { secret, culprits: who.clone() }, "{who:?}");
+        assert_eq!(
+            locate(&points, &shares, DEGREE),
+            Verdict::Decoded {
+                secret,
+                culprits: who.clone()
+            },
+            "{who:?}"
+        );
     }
 }
 
@@ -130,14 +160,24 @@ fn a_product_at_nine_nodes_survives_two_liars_and_at_seven_it_does_not() {
     let seven = points(7);
     let mut shares = share(&secret, PRODUCT_DEGREE, &seven, &mut rng);
     corrupt(&mut shares, &[1, 4]);
-    assert!(matches!(locate(&seven, &shares, PRODUCT_DEGREE), Verdict::Beyond { .. }),
-            "at seven a product corrects one, and this is two");
+    assert!(
+        matches!(
+            locate(&seven, &shares, PRODUCT_DEGREE),
+            Verdict::Beyond { .. }
+        ),
+        "at seven a product corrects one, and this is two"
+    );
 
     let nine = points(9);
     let mut shares = share(&secret, PRODUCT_DEGREE, &nine, &mut rng);
     corrupt(&mut shares, &[1, 4]);
-    assert_eq!(locate(&nine, &shares, PRODUCT_DEGREE),
-               Verdict::Decoded { secret, culprits: vec![1, 4] });
+    assert_eq!(
+        locate(&nine, &shares, PRODUCT_DEGREE),
+        Verdict::Decoded {
+            secret,
+            culprits: vec![1, 4]
+        }
+    );
 }
 
 #[test]
@@ -160,8 +200,13 @@ fn a_consistent_sharing_of_a_different_number_has_nothing_to_decode() {
     let points = points(7);
     let elsewhere = Scalar::from(4242u64);
     let shares = share(&elsewhere, DEGREE, &points, &mut rng);
-    assert_eq!(locate(&points, &shares, DEGREE),
-               Verdict::Decoded { secret: elsewhere, culprits: Vec::new() });
+    assert_eq!(
+        locate(&points, &shares, DEGREE),
+        Verdict::Decoded {
+            secret: elsewhere,
+            culprits: Vec::new()
+        }
+    );
 }
 
 #[test]
@@ -169,7 +214,10 @@ fn too_few_shares_to_determine_the_polynomial_is_refused() {
     let mut rng = OsRng;
     let points = points(2);
     let shares = share(&Scalar::from(3u64), DEGREE, &points, &mut rng);
-    assert!(matches!(locate(&points, &shares, DEGREE), Verdict::Beyond { .. }));
+    assert!(matches!(
+        locate(&points, &shares, DEGREE),
+        Verdict::Beyond { .. }
+    ));
 }
 
 #[test]
@@ -177,5 +225,59 @@ fn a_mismatched_number_of_points_and_shares_is_refused() {
     let mut rng = OsRng;
     let points = points(7);
     let shares = share(&Scalar::from(3u64), DEGREE, &points, &mut rng);
-    assert!(matches!(locate(&points, &shares[..5], DEGREE), Verdict::Beyond { .. }));
+    assert!(matches!(
+        locate(&points, &shares[..5], DEGREE),
+        Verdict::Beyond { .. }
+    ));
+}
+
+/// Past its correction capacity the locator must refuse, not guess.
+///
+/// A decoder that returns a wrong secret with a confident list of culprits is
+/// worse than one that returns nothing: the design's answer to a misbehaving
+/// node is to name it and slash its bond, and naming the wrong one is a
+/// transfer from an honest party to a dishonest one. So the interesting case is
+/// not one or two liars, which it corrects, but three, which it cannot.
+#[test]
+fn beyond_its_capacity_the_locator_refuses_rather_than_naming_the_wrong_node() {
+    let mut rng = OsRng;
+    let n = 7usize;
+    let degree = 2usize; // T = 2, so capacity is 2
+    assert_eq!(capacity(n, degree), 2);
+
+    let secret = Scalar::from(123_456u64);
+    let xs = points(n);
+    for liars in 1..=4usize {
+        let mut ys = share(&secret, degree, &xs, &mut rng);
+        // the liars are the last few, so the honest ones are not adjacent by
+        // accident in a way that flatters the decoder
+        for i in 0..liars {
+            ys[n - 1 - i] += Scalar::from(999u64 + i as u64);
+        }
+        match locate(&xs, &ys, degree) {
+            Verdict::Decoded {
+                secret: found,
+                culprits,
+            } => {
+                assert!(
+                    liars <= capacity(n, degree),
+                    "decoded with {liars} liars, past a capacity of {}",
+                    capacity(n, degree)
+                );
+                assert_eq!(found, secret, "decoded the wrong secret");
+                let expected: Vec<usize> = (0..liars).map(|i| n - 1 - i).collect();
+                let mut named = culprits.clone();
+                named.sort_unstable();
+                let mut want = expected.clone();
+                want.sort_unstable();
+                assert_eq!(named, want, "named the wrong nodes");
+            }
+            Verdict::Beyond { capacity: cap, .. } => {
+                assert!(
+                    liars > cap,
+                    "refused with {liars} liars, inside a capacity of {cap}"
+                );
+            }
+        }
+    }
 }

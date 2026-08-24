@@ -215,7 +215,17 @@ def verify_presentation(group: Group, presentation: KybPresentation,
 
 @dataclass
 class EntityLimits:
-    """Per-entity caps the venue enforces, keyed on the scope nullifier."""
+    """Per-entity caps the venue enforces, keyed on the scope nullifier.
+
+    The numbers are a venue's to set and these are a default. What they should
+    be set against is measured in `artifacts/probe_budget.json`: reading a
+    maker's inventory off its own two-sided quotes gives a correlation of about
+    0.53 that does not grow with the budget, and a confidence that does --- a
+    majority of seeds are distinguishable from zero at 24 probes and nearly all
+    at 96. So a cap does not prevent the attack; it sets how often an entity can
+    refresh the picture. 60 an epoch sits between those two figures, which is a
+    choice rather than a derivation, and a venue that cares should derive it.
+    """
 
     max_requests: int = 60
     max_probe_lots: int = 2_000
