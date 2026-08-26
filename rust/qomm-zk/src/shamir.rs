@@ -56,12 +56,27 @@ pub fn share<R: RngCore + CryptoRng>(
     points: &[Scalar],
     rng: &mut R,
 ) -> Vec<Scalar> {
+    share_with_coefficients(secret, degree, points, rng).0
+}
+
+/// Deal one Shamir polynomial and return both its evaluations and coefficients.
+///
+/// Most callers should use [`share`]. Verifiable secret sharing additionally
+/// publishes Pedersen commitments to the coefficients, so its dealer needs the
+/// exact polynomial bytes instead of generating a second, unrelated sharing.
+pub fn share_with_coefficients<R: RngCore + CryptoRng>(
+    secret: &Scalar,
+    degree: usize,
+    points: &[Scalar],
+    rng: &mut R,
+) -> (Vec<Scalar>, Vec<Scalar>) {
     let mut coefficients = Vec::with_capacity(degree + 1);
     coefficients.push(*secret);
     for _ in 0..degree {
         coefficients.push(Scalar::random(rng));
     }
-    points.iter().map(|x| evaluate(&coefficients, x)).collect()
+    let shares = points.iter().map(|x| evaluate(&coefficients, x)).collect();
+    (shares, coefficients)
 }
 
 /// Lagrange at zero. What an engine does, and it believes what it is given.

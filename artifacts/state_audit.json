@@ -1,126 +1,126 @@
 {
-  "host": "host-c",
-  "python": "3.13.5",
-  "group": "ed25519",
-  "ceiling": 8192,
-  "limit": 4000,
   "calibration": {
     "scalar_mult_us": {
+      "max": 75.269,
+      "mean": 26.220945,
+      "median": 25.6015,
+      "min": 25.511,
       "n": 200,
-      "mean": 36.75606503747986,
-      "sd": 2.6791426754241323,
-      "median": 36.41700095613487,
-      "min": 35.74999936972745,
-      "max": 67.5410010444466,
-      "rsd": 0.07288981213555457
+      "rsd": 0.14227740839594094,
+      "sd": 3.730648100292506
     }
   },
+  "ceiling": 8192,
   "chains": [
     {
-      "steps": 1,
-      "limit_commit_ms": 3.521833998092916,
+      "accepted": true,
+      "limit_commit_ms": 3.993813,
       "prove_per_step": {
+        "max": 7.779914,
+        "mean": 7.779914,
+        "median": 7.779914,
+        "min": 7.779914,
         "n": 1,
-        "mean": 7.722625003225403,
-        "sd": null,
-        "median": 7.722625003225403,
-        "min": 7.722625003225403,
-        "max": 7.722625003225403,
-        "rsd": null
+        "rsd": null,
+        "sd": null
       },
-      "verify_total_ms": 14.081125002121553,
-      "verify_ms_per_step": 14.081125002121553,
-      "accepted": true,
       "reason": "ok",
       "step_bytes": {
         "exact": 4960
-      }
+      },
+      "steps": 1,
+      "verify_ms_per_step": 2.1017560000000004,
+      "verify_total_ms": 2.1017560000000004
     },
     {
-      "steps": 5,
-      "limit_commit_ms": 3.4945830011565704,
+      "accepted": true,
+      "limit_commit_ms": 3.833595,
       "prove_per_step": {
+        "max": 7.760603,
+        "mean": 7.704327599999999,
+        "median": 7.700358,
+        "min": 7.673511,
         "n": 5,
-        "mean": 7.935441400331911,
-        "sd": 0.337137506377486,
-        "median": 7.817666002665646,
-        "min": 7.577124997624196,
-        "max": 8.424083000136307,
-        "rsd": 0.042485035093748506
+        "rsd": 0.004362947361400491,
+        "sd": 0.03361357577378497
       },
-      "verify_total_ms": 49.7944170019764,
-      "verify_ms_per_step": 9.95888340039528,
-      "accepted": true,
       "reason": "ok",
       "step_bytes": {
         "exact": 4960
-      }
+      },
+      "steps": 5,
+      "verify_ms_per_step": 1.5507844,
+      "verify_total_ms": 7.753922
     },
     {
-      "steps": 20,
-      "limit_commit_ms": 3.2654169990564696,
+      "accepted": true,
+      "limit_commit_ms": 3.8218,
       "prove_per_step": {
+        "max": 7.7194389999999995,
+        "mean": 7.69111535,
+        "median": 7.689441500000001,
+        "min": 7.661175,
         "n": 20,
-        "mean": 8.007035399714368,
-        "sd": 1.5130445939283799,
-        "median": 7.667020499866339,
-        "min": 7.426666001265403,
-        "max": 14.410250001674285,
-        "rsd": 0.1889643942353938
+        "rsd": 0.001859998689315581,
+        "sd": 0.014305464470374946
       },
-      "verify_total_ms": 299.10808299973723,
-      "verify_ms_per_step": 14.955404149986862,
-      "accepted": true,
       "reason": "ok",
       "step_bytes": {
         "exact": 4960
-      }
+      },
+      "steps": 20,
+      "verify_ms_per_step": 1.4489375,
+      "verify_total_ms": 28.97875
     },
     {
-      "steps": 50,
-      "limit_commit_ms": 3.2897909986786544,
-      "prove_per_step": {
-        "n": 50,
-        "mean": 10.626086800111807,
-        "sd": 6.273879709652854,
-        "median": 7.790020999891567,
-        "min": 7.492749999073567,
-        "max": 35.57137499956298,
-        "rsd": 0.5904224036252782
-      },
-      "verify_total_ms": 545.4079999981332,
-      "verify_ms_per_step": 10.908159999962663,
       "accepted": true,
+      "limit_commit_ms": 3.8180829999999997,
+      "prove_per_step": {
+        "max": 7.833092,
+        "mean": 7.69715416,
+        "median": 7.6903545,
+        "min": 7.656,
+        "n": 50,
+        "rsd": 0.00425122844514785,
+        "sd": 0.03272236071168011
+      },
       "reason": "ok",
       "step_bytes": {
         "exact": 4960
-      }
+      },
+      "steps": 50,
+      "verify_ms_per_step": 1.4310552,
+      "verify_total_ms": 71.55276
     }
   ],
+  "group": "ed25519",
+  "host": "host-a",
+  "limit": 4000,
+  "python": "3.12.3",
   "rejections": [
     {
+      "accepted": false,
       "attack": "replayed or skipped state",
-      "accepted": false,
-      "reason": "step 2 (index 1) does not follow the state before it: a replayed or forked inventory",
-      "ms": 12.86387499931152
+      "ms": 2.075486,
+      "reason": "step 2 (index 1) does not follow the state before it: a replayed or forked inventory"
     },
     {
+      "accepted": false,
       "attack": "forked state",
-      "accepted": false,
-      "reason": "step 1 (index 1) does not follow the state before it: a replayed or forked inventory",
-      "ms": 12.875042000814574
+      "ms": 2.057165,
+      "reason": "step 1 (index 1) does not follow the state before it: a replayed or forked inventory"
     },
     {
+      "accepted": false,
       "attack": "limit swapped for a looser one",
-      "accepted": false,
-      "reason": "step 0 (index 0) failed its proofs",
-      "ms": 9.012083999550669
+      "ms": 0.89619,
+      "reason": "step 0 (index 0) failed its proofs"
     },
     {
-      "attack": "breach the committed limit",
       "accepted": false,
-      "reason": "inventory 7999 breaks the committed limit 4000; the maker cannot prove this step and must decline the fill",
-      "ms": 0.0
+      "attack": "breach the committed limit",
+      "ms": 0.0,
+      "reason": "inventory 7999 breaks the committed limit 4000; the maker cannot prove this step and must decline the fill"
     }
   ]
 }

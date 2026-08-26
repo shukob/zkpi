@@ -94,22 +94,26 @@ tree.
 
 ## What is here
 
-Rust:
+Rust crates:
 
 - `rust/qomm-zk`
 - `rust/qomm-zkpi`
+- `rust/qomm-proofs`
 - `rust/qomm-measure`
+- `rust/qomm-harness`
 
-Python:
+Measurement binaries carried by `qomm-harness`:
 
-- `zk/`
+- `run_quote_proof`
+- `run_state_audit`
+- `run_voleith`
+- `zk_bench`
+- `zk_compare`
 
 `artifacts/` holds the measurements the numbers in the paper are taken from, as
-the runners wrote them. Each carries the host it ran on as a label (`host-a`,
-`host-b`, `host-c`) rather than a machine name, and the mapping back is not
-published --- it names people's machines. `scripts/hosts.py` reads it from a
-local file when there is one and labels nothing when there is not, which is what
-this copy does.
+the binaries wrote them. Each carries the host it ran on as a label (`host-a`,
+`host-b`, `host-c`) rather than a machine name; the private mapping back
+to real machines is not published.
 
 ## Documents
 
@@ -118,19 +122,24 @@ this copy does.
 - [`ZKPI_WIRE.md`](ZKPI_WIRE.md) --- the bytes an instruction travels as, the vectors to check an implementation against, and where it can run
 - [`REVIEW.md`](REVIEW.md) --- what two rounds of review found, including what was checked and found sound
 
+## Depends on
+
+- [qomm](https://github.com/shukob/qomm)
+
+Cargo resolves these repositories from the checked-in lock file.
+
 ## Running it
 
-```
-cargo test --workspace --all-targets --all-features --release  # in rust/
-uv sync --frozen
-uv run --frozen pytest tests/                               # repository root
+```sh
+cd rust
+cargo test -j 4 --locked --workspace
 ```
 
 ## Measurements
 
-Every reported number has an artifact and a command that produces it. Where a
+Every reported number has an artifact and a Rust binary that produces it. Where a
 measurement needs something not shipped here --- MP-SPDZ, a second host, a market
-data feed --- the command says so and fails rather than substituting a default.
+data feed --- the binary says so and fails rather than substituting a default.
 
 ## License
 

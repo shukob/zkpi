@@ -7,6 +7,7 @@
 //! written here is what has no audited equivalent: the sigma protocols this
 //! design needs, and the one-out-of-many proof.
 pub mod adaptor;
+pub mod bitrange;
 pub mod oneofmany;
 pub mod or_dleq;
 pub mod pedersen;

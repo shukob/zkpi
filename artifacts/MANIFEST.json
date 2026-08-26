@@ -1,15 +1,19 @@
 {
   "artifacts": {
     "quote_proof.json": {
-      "bytes": 5903,
+      "bytes": 4916,
       "host": "host-a",
-      "sha256": "c588cb6b900d2a823aaa034936fcb76c71c6cffb68de760b200a34c39364bb2b"
+      "sha256": "d2343739fbc36218fa3009fdeb20cf76dd07edacf60f9fa857334335ba6438f6"
+    },
+    "range_scheme_compare.json": {
+      "bytes": 3054,
+      "sha256": "9271f190e416f748a280cf0fa161e1140f26142a4110447b7d28907e918c00ae"
     },
     "state_audit.json": {
-      "bytes": 3305,
-      "host": "host-c",
-      "python": "3.13.5",
-      "sha256": "0add7cf1af6289c208068d23c18066ee6a577eeb2c9313da5b91a8ff420a6f4b"
+      "bytes": 3046,
+      "host": "host-a",
+      "python": "3.12.3",
+      "sha256": "8b599ccd47f15354674fab09772604dbeb95441ac7e9470e2227e58e814dbe69"
     },
     "voleith.json": {
       "bytes": 8438,
@@ -21,22 +25,22 @@
       "sha256": "7f67d94ebedb88f4982ff6fde19714c05e40148a53415f71754592d732fb890e"
     },
     "zk_bench.json": {
-      "bytes": 15357,
-      "host": "host-c",
-      "python": "3.13.5",
-      "sha256": "b1c7370a24d86129cf23a66aa6ac2edb585c99568977a966166de7beb40ec717"
+      "bytes": 14034,
+      "host": "host-a",
+      "python": "3.12.3",
+      "sha256": "b4ba74e2273ec4ac352818041a17c074bbb36f8c2c5dbd642a126ba09605d18b"
     },
     "zk_compare.json": {
-      "bytes": 9687,
-      "host": "host-c",
-      "sha256": "d21e3a7aa980291e399d05d3e8f050d25878ead7d93f568144849ad92096deba"
+      "bytes": 8903,
+      "host": "host-a",
+      "sha256": "2cf55e5d63d1ae78d62f207aa39c085c17a46bde378552a85be8e7aa8682c558"
     },
     "zkpi_wire.json": {
-      "bytes": 1128,
-      "host": "host-c",
+      "bytes": 1126,
+      "host": "host-a",
       "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
-      "sha256": "2c33d8c69297d0e0f4647224277b3c545fefad6cc9b5a9bde19cb91fe4b2f5a6"
+      "sha256": "568b4acab5ae70e85d380c5b574aebaeeabdc08d74fecfb7ec62073d874c8d4a"
     }
   },
-  "commit": "7b7ab116a640626433142af57efcefb2ed42f773"
+  "commit": "8dad0a08bbc894608ef7a47c8b8c0b442b912f34"
 }

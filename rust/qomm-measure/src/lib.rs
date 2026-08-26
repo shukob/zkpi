@@ -17,6 +17,10 @@
 //! marks those so the two kinds cannot be confused downstream.
 
 use std::fmt;
+pub mod beta;
+pub mod fsum;
+pub mod pyrandom;
+pub mod pyround;
 pub mod hosts;
 
 use std::time::Instant;
@@ -40,9 +44,19 @@ impl Summary {
             return None;
         }
         let n = samples.len();
-        let mean = samples.iter().sum::<f64>() / n as f64;
+        // `statistics.fmean`, which is `math.fsum` and one division.
+        let mean = crate::fsum::fsum(samples.iter().copied()) / n as f64;
         let sd = if n > 1 {
-            let var = samples.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (n - 1) as f64;
+            // Not `statistics.stdev`, which accumulates the sum of squared
+            // deviations in exact rational arithmetic and takes one square root
+            // at the end. This is the two-pass float estimator, and it can
+            // differ from CPython's in the last place. Everything `Summary`
+            // describes is a duration, and durations are excluded from the
+            // Python-against-Rust comparisons for the obvious reason, so the
+            // difference is not observable there --- but it would be if a
+            // non-timing value ever reached this.
+            let var =
+                crate::fsum::fsum(samples.iter().map(|v| (v - mean) * (v - mean))) / (n - 1) as f64;
             Some(var.sqrt())
         } else {
             None

@@ -83,7 +83,7 @@ host, not for five independent organisations or public-network readiness.
 
 Before the dedicated VM existed, the project measured where a full verifier
 could fit. A whole verification is about 1.6 ms of curve arithmetic, dominated
-by the two Bulletproofs. `run_evm.py` measured one ed25519 scalar multiplication
+by the two Bulletproofs. `rust/qomm-harness/src/bin/run_evm.rs` measured one ed25519 scalar multiplication
 implemented in EVM bytecode at 302,401 gas. These measurements explain why EVM
 bytecode was rejected; they are not the deployed path.
 

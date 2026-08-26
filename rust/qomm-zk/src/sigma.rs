@@ -57,15 +57,28 @@ pub fn prove_opening<R: RngCore + CryptoRng>(
     let k_value = Scalar::random(rng);
     let k_blinding = Scalar::random(rng);
     let t = key.g * k_value + key.h * k_blinding;
-    transcript.append_message(b"dom", b"qomm/opening");
-    transcript.append_point(b"C", commitment);
-    transcript.append_point(b"T", &t);
-    let c = transcript.challenge_scalar(b"c");
+    let c = opening_challenge(transcript, commitment, &t);
     OpeningProof {
         t,
         z_value: k_value + c * value,
         z_blinding: k_blinding + c * blinding,
     }
+}
+
+/// Derive the Fiat--Shamir challenge for an opening proof.
+///
+/// Threshold assemblers need the challenge before they can form their partial
+/// responses. Keeping the transcript framing here ensures those assemblers use
+/// exactly the same ordinary proof format as [`prove_opening`].
+pub fn opening_challenge(
+    transcript: &mut Transcript,
+    commitment: &RistrettoPoint,
+    t: &RistrettoPoint,
+) -> Scalar {
+    transcript.append_message(b"dom", b"qomm/opening");
+    transcript.append_point(b"C", commitment);
+    transcript.append_point(b"T", t);
+    transcript.challenge_scalar(b"c")
 }
 
 /// The verification equation, rearranged to sum to the identity so a batch can
@@ -77,10 +90,7 @@ pub fn opening_terms(
     proof: &OpeningProof,
     weight: &Scalar,
 ) -> (Vec<Scalar>, Vec<RistrettoPoint>) {
-    transcript.append_message(b"dom", b"qomm/opening");
-    transcript.append_point(b"C", commitment);
-    transcript.append_point(b"T", &proof.t);
-    let c = transcript.challenge_scalar(b"c");
+    let c = opening_challenge(transcript, commitment, &proof.t);
     (
         vec![
             weight * proof.z_value,
@@ -313,7 +323,12 @@ pub fn prove_product<R: RngCore + CryptoRng>(
     }
 }
 
-fn product_challenge(
+/// Derive the Fiat--Shamir challenge for a product proof.
+///
+/// This is public for threshold assembly: partial responses are formed only
+/// after every first-move point has been combined. The transcript bytes remain
+/// owned by this module, beside the ordinary prover and verifier.
+pub fn product_challenge(
     transcript: &mut Transcript,
     c_a: &RistrettoPoint,
     c_b: &RistrettoPoint,
