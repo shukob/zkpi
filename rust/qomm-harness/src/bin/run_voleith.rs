@@ -127,7 +127,13 @@ fn run_main() -> HarnessResult<bool> {
         "depth": options.depth,
         "tree_repeats": options.tree_repeats,
         "soundness_bits": options.depth * options.tree_repeats,
-        "caveat": "Pedersen is libsodium through PyNaCl, which is C. VOLEitH is hashlib plus CPython field arithmetic. The wall-clock ratio is an upper bound on the transform's cost, not an estimate of it. Bytes and hash counts do not have this problem.",
+        // The Python measurement said "Pedersen is libsodium through PyNaCl,
+        // which is C. VOLEitH is hashlib plus CPython field arithmetic", and
+        // called the ratio an upper bound on the transform's cost. The port
+        // makes that false and moves the ratio the other way: proving at 167
+        // inputs went 3.93x to 5.84x, because Pedersen's glue was the CPython
+        // and VOLEitH's hashing was already C, so Pedersen is what Rust freed.
+        "caveat": "Both arms are Rust. Pedersen is curve25519-dalek; VOLEitH is the sha2 and sha3 crates over this repository's own field arithmetic. The comparison is no longer C against CPython, so the ratio is no longer an upper bound in the earlier sense --- but curve25519-dalek is audited and heavily tuned and the field arithmetic here is not, so an unmeasured part of the ratio is still implementation rather than transform. Bytes and hash counts do not have this problem.",
         "arms": {"pedersen": pedersen_rows, "voleith": voleith_rows},
         "ratios": ratios,
         "sweep": parameter_sweep(max_inputs),

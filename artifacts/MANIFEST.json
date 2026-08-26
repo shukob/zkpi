@@ -16,9 +16,9 @@
       "sha256": "8b599ccd47f15354674fab09772604dbeb95441ac7e9470e2227e58e814dbe69"
     },
     "voleith.json": {
-      "bytes": 8438,
+      "bytes": 7865,
       "host": "host-a",
-      "sha256": "f8c46f68171b61ad0c0f1ef741450f83017e126a2971685e65a0f35d553e6109"
+      "sha256": "b461c01fbfeca8b1bcbc9f65ed389df68d6ec518e948c888cd2fe35b4fd90285"
     },
     "voleith_prediction.json": {
       "bytes": 3658,
@@ -42,5 +42,5 @@
       "sha256": "568b4acab5ae70e85d380c5b574aebaeeabdc08d74fecfb7ec62073d874c8d4a"
     }
   },
-  "commit": "8dad0a08bbc894608ef7a47c8b8c0b442b912f34"
+  "commit": "e786c3d0f92c420654a21d4fd97a45a9cf6806f8"
 }
