@@ -1,5 +1,3 @@
-//! Rust port of `zk/compare.py`.
-
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
@@ -361,7 +359,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn proof_sizes_match_the_python_construction() {
+    fn proof_sizes_match_the_locked_construction() {
         let rows = one_of_many(&[4, 8, 16], 1).unwrap();
         assert_eq!(rows[0]["or_bytes"]["exact"], 288);
         assert_eq!(rows[0]["gk_bytes"]["exact"], 480);

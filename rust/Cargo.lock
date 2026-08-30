@@ -556,6 +556,7 @@ dependencies = [
  "qomm-dsl",
  "qomm-zk",
  "rand_core",
+ "serde",
  "sha2",
 ]
 
@@ -582,6 +583,7 @@ dependencies = [
  "frost-ristretto255",
  "merlin",
  "qomm-measure",
+ "qomm-proofs",
  "qomm-zk",
  "rand",
  "rand_core",

@@ -1,4 +1,4 @@
-//! Assertion-for-assertion port of `tests/test_policy_kyb.py`.
+//! Contract tests for policy and KYB proof composition.
 //!
 //! The control assertion before each negative case is intentional: a forged
 //! object must first be shown to work in its honest form, then reach the check
@@ -552,12 +552,12 @@ fn limits_bind_the_entity_not_the_wallet() {
         .map(|_| entities[0].scope_nullifier(SCOPE))
         .collect::<Vec<_>>();
     assert!(nullifiers.windows(2).all(|pair| pair[0] == pair[1]));
-    for index in 0..3 {
-        assert_eq!(limiter.allow_request(&nullifiers[index], 7, 0), Ok(()));
+    for nullifier in nullifiers.iter().take(3) {
+        assert_eq!(limiter.allow_request(nullifier, 7, 0), Ok(()));
     }
-    for index in 3..5 {
+    for nullifier in [&nullifiers[3], &nullifiers[0]] {
         assert_eq!(
-            limiter.allow_request(&nullifiers[index % 4], 7, 0),
+            limiter.allow_request(nullifier, 7, 0),
             Err(Refused::RequestCap)
         );
     }

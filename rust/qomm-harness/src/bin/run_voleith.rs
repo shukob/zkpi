@@ -1,5 +1,3 @@
-//! Rust port of `scripts/run_voleith.py`.
-
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use qomm_harness::voleith::{self, Packing, COMMIT_BYTES, SEED_BYTES};
@@ -78,7 +76,7 @@ fn run_main() -> HarnessResult<bool> {
         println!(
             "recomputed the arithmetic in {}, timings untouched (measured on {})",
             options.out.display(),
-            qomm_harness::py_display(&held["host"]),
+            qomm_harness::value_display(&held["host"]),
         );
         println!(
             "  Pi_2D-LC best: k_C={} n_C={} {} B, {} hashes",
@@ -127,13 +125,8 @@ fn run_main() -> HarnessResult<bool> {
         "depth": options.depth,
         "tree_repeats": options.tree_repeats,
         "soundness_bits": options.depth * options.tree_repeats,
-        // The Python measurement said "Pedersen is libsodium through PyNaCl,
-        // which is C. VOLEitH is hashlib plus CPython field arithmetic", and
-        // called the ratio an upper bound on the transform's cost. The port
-        // makes that false and moves the ratio the other way: proving at 167
-        // inputs went 3.93x to 5.84x, because Pedersen's glue was the CPython
-        // and VOLEitH's hashing was already C, so Pedersen is what Rust freed.
-        "caveat": "Both arms are Rust. Pedersen is curve25519-dalek; VOLEitH is the sha2 and sha3 crates over this repository's own field arithmetic. The comparison is no longer C against CPython, so the ratio is no longer an upper bound in the earlier sense --- but curve25519-dalek is audited and heavily tuned and the field arithmetic here is not, so an unmeasured part of the ratio is still implementation rather than transform. Bytes and hash counts do not have this problem.",
+        // Both arms now share the same language and measurement harness.
+        "caveat": "Both arms are Rust. Pedersen uses curve25519-dalek; VOLEitH uses the sha2 and sha3 crates over this repository's own field arithmetic. The curve backend is audited and heavily tuned while the field arithmetic is not, so part of the timing ratio remains an implementation comparison. Bytes and hash counts do not have this problem.",
         "arms": {"pedersen": pedersen_rows, "voleith": voleith_rows},
         "ratios": ratios,
         "sweep": parameter_sweep(max_inputs),
@@ -483,7 +476,7 @@ fn print_arm(name: &str, inputs: usize, row: &Value) {
         render(&row["prove_ms"], " ms"),
         render(&row["verify_ms"], " ms"),
         row["bytes"]["exact"],
-        qomm_harness::py_display(&row["accepted"]),
+        qomm_harness::value_display(&row["accepted"]),
     );
 }
 
@@ -530,7 +523,7 @@ fn random_bits(bits: usize, rng: &mut OsRng) -> u128 {
 
 fn round_places(value: f64, places: i32) -> f64 {
     let scale = 10f64.powi(places);
-    qomm_measure::pyround::py_round(value * scale) as f64 / scale
+    qomm_measure::rounding::round_half_even(value * scale) as f64 / scale
 }
 
 fn parse_args() -> HarnessResult<Options> {

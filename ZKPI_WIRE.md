@@ -1,11 +1,12 @@
-# zkPI on the wire, version 1
+<!-- BEGIN GENERATED WIRE SPEC -->
+# zkPI on the wire, version 2
 
 Big-endian throughout. Every field is fixed-width or length-prefixed, and the order below is the order on the wire. Nothing is optional: an instruction with a field missing is not a shorter instruction.
 
 | field | bytes | what |
 | --- | ---: | --- |
 | magic | 8 | `QOMMZKPI` |
-| version | 2 | currently 1. A verifier that meets one it does not know **stops** --- it does not guess at a layout, because a misparsed commitment is a valid point |
+| version | 2 | currently 2. A verifier that meets one it does not know **stops** --- it does not guess at a layout, because a misparsed commitment is a valid point |
 | amount commitment | 32 | compressed Ristretto |
 | price commitment | 32 | compressed Ristretto |
 | asset commitment | 32 | compressed Ristretto |
@@ -13,24 +14,32 @@ Big-endian throughout. Every field is fixed-width or length-prefixed, and the or
 | payee handle | 32 | compressed Ristretto |
 | deadline | 8 | seconds since the Unix epoch |
 | nonce | 32 | what makes the nullifier unique |
-| quote key | 8 | which quote the quorum priced |
+| quote proof digest | 32 | SHA-256 digest of the complete public quote proof; it reveals neither the packed winner nor the price |
 | signature | 64 | FROST over Ristretto255 |
-| range commitment count | 2 | how many commitments the range proofs are about |
-| range commitments | 32 x count | compressed Ristretto each |
 | amount proof length | 4 |  |
-| amount range proof | that many | Bulletproofs |
+| amount range proof | that many | jointly assembled threshold range proof |
 | price proof length | 4 |  |
-| price range proof | that many | Bulletproofs |
+| price range proof | that many | jointly assembled threshold range proof |
+
+## Version 1 compatibility format
+
+Version 1 is still decoded and re-encoded when explicitly tagged as version 1. It carries an 8-byte packed quote key, a range-commitment count, the corresponding commitments, and two Bulletproofs. It is a migration format, not the product issuance path. Version 2 emits a 32-byte quote-proof digest and two jointly assembled threshold range proofs.
 
 ## What is deliberately absent
 
 No compression, no self-describing container, no forward compatibility. Each is a way for two implementations to disagree about what they read, and the table above is a day's work to implement from.
+<!-- END GENERATED WIRE SPEC -->
 
 ## Checking an implementation against this
 
-Vectors are in `artifacts/zkpi_vectors/`. One is a signed instruction and five
-are it, damaged in the five ways a second implementation is most likely to get
-wrong.
+Vectors are in `artifacts/zkpi_vectors/`. The directory contains one accepted
+instruction for each supported wire version and five damaged forms of each.
+`accepted-v2.bin` is the product shape: its two range proofs were assembled from
+node-local Shamir contributions and its signed quote binding is a 32-byte proof
+digest. The current fixed product vector is 9,726 bytes at 16-bit quantity and
+32-bit price bounds; the unsuffixed files retain the 1,572-byte version-1
+compatibility vectors. These sizes make the migration cost explicit rather than
+presenting the smaller legacy wire as the product cost.
 
 ```
 qomm-zkpi-verify --check-vectors artifacts/zkpi_vectors
@@ -49,7 +58,7 @@ format changes and never because a check disagreed.
 ## Running the verifier
 
 ```
-qomm-zkpi-verify --self-test                       # issue, encode, decode, verify
+qomm-zkpi-verify --self-test                       # issue v2, encode, decode, verify
 qomm-zkpi-verify --quorum <hex> --now <seconds> < instruction.bin
 qomm-zkpi-verify < instruction.bin                 # layout only, and it says so
 ```
@@ -66,24 +75,28 @@ account-opening and multi-leg settlement transitions. No Solidity, EVM bytecode
 or Subnet-EVM precompile is in the acceptance path.
 
 The trust boundary is explicit. The DeFMI node committee verifies the two
-Bulletproofs and the quote proof before signing. The custom VM then checks a
-3-of-7 Ed25519 approval, the signed proof digest, the chain and rail domains,
-the deadline, sequence, previous state root and nullifier before applying the
-transition atomically. The validators do **not** currently re-run the complete
-zero-knowledge verifier. Moving the proof verifier into every validator remains
-a separate hardening step; the current chain guarantee is that the approved
-statement, not an unapproved or stale statement, is the one consensus applied.
+jointly assembled threshold range proofs and the complete quote proof before
+signing. The product transaction carries the complete submitted evidence, and
+every custom-VM validator independently checks the 3-of-7 Ed25519 approval,
+typed zkPI, complete quote proof, joint ranges, taker price limit, asset link,
+DvP relation, chain and rail domains, deadline, sequence, previous state root
+and nullifier before applying the transition atomically. Validators do not
+re-run the private MP-SPDZ transcript or prove the node-local share-to-proof
+handoff; that remains the committee trust and liveness boundary.
 
-`artifacts/avalanche_l1_acceptance.json` records a five-AvalancheGo local
-acceptance run through heights 1--5, a node restart, a crash-window retry and
-identical state roots. It is evidence for native execution and recovery on one
-host, not for five independent organisations or public-network readiness.
+`artifacts/avalanche_qomm_full_acceptance.json` records the full local path: five
+AvalancheGo validators, seven process-isolated MP-SPDZ parties, an atomic batch
+of two RFQs at height 53, a later claim materialisation at height 54 and a
+validator restart with identical state roots. It is evidence for native
+execution and recovery on one host, not for independent organisations, a real
+WAN or public-network readiness.
 
 ## Historical execution-layer comparison
 
-Before the dedicated VM existed, the project measured where a full verifier
-could fit. A whole verification is about 1.6 ms of curve arithmetic, dominated
-by the two Bulletproofs. `rust/qomm-harness/src/bin/run_evm.rs` measured one ed25519 scalar multiplication
+Before the dedicated VM and version-2 product instruction existed, the project
+measured where the version-1 compatibility verifier could fit. Its verification
+is about 1.6 ms of curve arithmetic, dominated by two Bulletproofs. The retired
+chain-comparison runner measured one ed25519 scalar multiplication
 implemented in EVM bytecode at 302,401 gas. These measurements explain why EVM
 bytecode was rejected; they are not the deployed path.
 

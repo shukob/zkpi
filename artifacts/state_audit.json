@@ -1,25 +1,25 @@
 {
   "calibration": {
     "scalar_mult_us": {
-      "max": 75.269,
-      "mean": 26.220945,
-      "median": 25.6015,
-      "min": 25.511,
+      "max": 52.208,
+      "mean": 36.971225,
+      "median": 35.5,
+      "min": 34.916000000000004,
       "n": 200,
-      "rsd": 0.14227740839594094,
-      "sd": 3.730648100292506
+      "rsd": 0.07840107922441886,
+      "sd": 2.8985839402488147
     }
   },
   "ceiling": 8192,
   "chains": [
     {
       "accepted": true,
-      "limit_commit_ms": 3.993813,
+      "limit_commit_ms": 5.224958,
       "prove_per_step": {
-        "max": 7.779914,
-        "mean": 7.779914,
-        "median": 7.779914,
-        "min": 7.779914,
+        "max": 10.826333,
+        "mean": 10.826333,
+        "median": 10.826333,
+        "min": 10.826333,
         "n": 1,
         "rsd": null,
         "sd": null
@@ -29,91 +29,90 @@
         "exact": 4960
       },
       "steps": 1,
-      "verify_ms_per_step": 2.1017560000000004,
-      "verify_total_ms": 2.1017560000000004
+      "verify_ms_per_step": 2.454,
+      "verify_total_ms": 2.454
     },
     {
       "accepted": true,
-      "limit_commit_ms": 3.833595,
+      "limit_commit_ms": 5.2885,
       "prove_per_step": {
-        "max": 7.760603,
-        "mean": 7.704327599999999,
-        "median": 7.700358,
-        "min": 7.673511,
+        "max": 10.833499999999999,
+        "mean": 10.750125,
+        "median": 10.738583,
+        "min": 10.671625,
         "n": 5,
-        "rsd": 0.004362947361400491,
-        "sd": 0.03361357577378497
+        "rsd": 0.00593424674198752,
+        "sd": 0.06379389425720859
       },
       "reason": "ok",
       "step_bytes": {
         "exact": 4960
       },
       "steps": 5,
-      "verify_ms_per_step": 1.5507844,
-      "verify_total_ms": 7.753922
+      "verify_ms_per_step": 1.8346250000000002,
+      "verify_total_ms": 9.173125
     },
     {
       "accepted": true,
-      "limit_commit_ms": 3.8218,
+      "limit_commit_ms": 4.899917,
       "prove_per_step": {
-        "max": 7.7194389999999995,
-        "mean": 7.69111535,
-        "median": 7.689441500000001,
-        "min": 7.661175,
+        "max": 11.526584,
+        "mean": 10.5956877,
+        "median": 10.553021,
+        "min": 10.310416,
         "n": 20,
-        "rsd": 0.001859998689315581,
-        "sd": 0.014305464470374946
+        "rsd": 0.023986207337513245,
+        "sd": 0.2541503620557388
       },
       "reason": "ok",
       "step_bytes": {
         "exact": 4960
       },
       "steps": 20,
-      "verify_ms_per_step": 1.4489375,
-      "verify_total_ms": 28.97875
+      "verify_ms_per_step": 1.71775625,
+      "verify_total_ms": 34.355125
     },
     {
       "accepted": true,
-      "limit_commit_ms": 3.8180829999999997,
+      "limit_commit_ms": 4.839709,
       "prove_per_step": {
-        "max": 7.833092,
-        "mean": 7.69715416,
-        "median": 7.6903545,
-        "min": 7.656,
+        "max": 11.951625,
+        "mean": 11.4239425,
+        "median": 11.540479,
+        "min": 10.427166,
         "n": 50,
-        "rsd": 0.00425122844514785,
-        "sd": 0.03272236071168011
+        "rsd": 0.03396402998293775,
+        "sd": 0.38800312559335687
       },
       "reason": "ok",
       "step_bytes": {
         "exact": 4960
       },
       "steps": 50,
-      "verify_ms_per_step": 1.4310552,
-      "verify_total_ms": 71.55276
+      "verify_ms_per_step": 1.78528082,
+      "verify_total_ms": 89.264041
     }
   ],
   "group": "ed25519",
-  "host": "host-a",
+  "host": "host-c",
   "limit": 4000,
-  "python": "3.12.3",
   "rejections": [
     {
       "accepted": false,
       "attack": "replayed or skipped state",
-      "ms": 2.075486,
+      "ms": 2.662666,
       "reason": "step 2 (index 1) does not follow the state before it: a replayed or forked inventory"
     },
     {
       "accepted": false,
       "attack": "forked state",
-      "ms": 2.057165,
+      "ms": 2.477291,
       "reason": "step 1 (index 1) does not follow the state before it: a replayed or forked inventory"
     },
     {
       "accepted": false,
       "attack": "limit swapped for a looser one",
-      "ms": 0.89619,
+      "ms": 1.130292,
       "reason": "step 0 (index 0) failed its proofs"
     },
     {
@@ -122,5 +121,6 @@
       "ms": 0.0,
       "reason": "inventory 7999 breaks the committed limit 4000; the maker cannot prove this step and must decline the fill"
     }
-  ]
+  ],
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
 }

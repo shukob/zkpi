@@ -1,7 +1,5 @@
-//! Rust port of `zk/bench.py`.
-
-use qomm_harness::legacy_zk_bench::{application_rows, ladder_row, primitive_costs, BACKENDS};
-use qomm_harness::{parse_value, python_version, write_pretty_json, HarnessResult};
+use qomm_harness::zk_bench_support::{application_rows, ladder_row, primitive_costs, BACKENDS};
+use qomm_harness::{parse_value, rustc_version, write_pretty_json, HarnessResult};
 use serde_json::{json, Value};
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -74,7 +72,7 @@ fn run_main() -> HarnessResult<()> {
 
     let payload = json!({
         "host": qomm_measure::hosts::this_host(),
-        "python": python_version(),
+        "rustc": rustc_version(),
         "machine": machine(),
         "primitives": primitive_costs(),
         "ladder": ladder,
@@ -194,13 +192,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn machine_matches_the_retired_platform_contract() {
+    fn machine_matches_the_versioned_platform_contract() {
         let expected = match (std::env::consts::OS, std::env::consts::ARCH) {
             ("macos", "aarch64") => "arm64",
             ("macos", "x86_64") | ("linux", "x86_64") => "x86_64",
             ("linux", "aarch64") => "aarch64",
             (system, architecture) => {
-                panic!("retired platform contract has no {system}/{architecture} entry")
+                panic!("versioned platform contract has no {system}/{architecture} entry")
             }
         };
         assert_eq!(machine(), expected);

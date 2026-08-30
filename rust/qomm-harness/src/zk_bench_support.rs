@@ -1,4 +1,4 @@
-//! The pluggable groups and proof operations measured by `zk/bench.py`.
+//! Pluggable groups and proof operations used by the native benchmark.
 //!
 //! Production Rust uses the audited Ristretto-backed crates.  The benchmark is
 //! also the historical optimisation ladder, however, so its four RFC 3526

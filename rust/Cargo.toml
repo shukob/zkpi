@@ -30,6 +30,7 @@ base64 = "0.22"
 hex = "0.4"
 thiserror = "1"
 rand = "0.8"
+regex = "1.13.1"
 openssl = "0.10"
 libc = "0.2"
 qomm-zk = { path = "qomm-zk" }

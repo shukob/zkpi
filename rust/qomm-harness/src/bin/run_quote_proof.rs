@@ -1,12 +1,10 @@
-//! Rust port of `scripts/run_quote_proof.py`.
-
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
 use qomm_harness::{parse_value, timing_summary, write_pretty_json, HarnessResult};
+use qomm_measure::deterministic_random::DeterministicRng;
 use qomm_proofs::quote_proof::{MakerWitness, QuoteCircuit, Registered};
 use qomm_proofs::threshold_sigma::{deal, joint_opening_from_shares, joint_prove_opening};
-use qomm_measure::pyrandom::PyRandom;
 use qomm_zk::bitrange::prove_bounded;
 use qomm_zk::pedersen::Pedersen;
 use qomm_zk::sigma::verify_opening;
@@ -78,7 +76,7 @@ fn span_bits(n_slots: usize) -> usize {
 }
 
 fn makers_for(n: usize, seed: u64, rng: &mut OsRng) -> Vec<MakerWitness> {
-    let mut values = PyRandom::new(seed);
+    let mut values = DeterministicRng::new(seed);
     (0..n)
         .map(|_| MakerWitness {
             ask_level: 100_000 + values.randint(-15, 15),

@@ -5,30 +5,22 @@
       "host": "host-a",
       "sha256": "d2343739fbc36218fa3009fdeb20cf76dd07edacf60f9fa857334335ba6438f6"
     },
-    "range_scheme_compare.json": {
-      "bytes": 3054,
-      "sha256": "9271f190e416f748a280cf0fa161e1140f26142a4110447b7d28907e918c00ae"
-    },
     "state_audit.json": {
-      "bytes": 3046,
-      "host": "host-a",
-      "python": "3.12.3",
-      "sha256": "8b599ccd47f15354674fab09772604dbeb95441ac7e9470e2227e58e814dbe69"
+      "bytes": 3056,
+      "host": "host-c",
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "sha256": "8fdb07dedad991dc87e70929c61ccbfca3be935d1d8e90be83d1f9de66ff96a0"
     },
     "voleith.json": {
-      "bytes": 7865,
-      "host": "host-a",
-      "sha256": "b461c01fbfeca8b1bcbc9f65ed389df68d6ec518e948c888cd2fe35b4fd90285"
-    },
-    "voleith_prediction.json": {
-      "bytes": 3658,
-      "sha256": "7f67d94ebedb88f4982ff6fde19714c05e40148a53415f71754592d732fb890e"
+      "bytes": 7679,
+      "host": "host-c",
+      "sha256": "f0ed398328535fe0a5978b65faff8e0b460a354bf1409cf107ad4739c77d991c"
     },
     "zk_bench.json": {
-      "bytes": 14034,
-      "host": "host-a",
-      "python": "3.12.3",
-      "sha256": "b4ba74e2273ec4ac352818041a17c074bbb36f8c2c5dbd642a126ba09605d18b"
+      "bytes": 14236,
+      "host": "host-c",
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "sha256": "d01c1c883debdbc092cc1d1e8beba5cfd7b06628d2190f54916a8038c12cd90c"
     },
     "zk_compare.json": {
       "bytes": 8903,
@@ -42,5 +34,5 @@
       "sha256": "568b4acab5ae70e85d380c5b574aebaeeabdc08d74fecfb7ec62073d874c8d4a"
     }
   },
-  "commit": "e786c3d0f92c420654a21d4fd97a45a9cf6806f8"
+  "commit": "f6d2d679c05b20a81a1eeebbd538ef17bb7caebe"
 }

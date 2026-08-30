@@ -8,13 +8,13 @@
         },
         "n_inputs": 16,
         "prove_ms": {
-          "max": 0.9829629999999999,
-          "mean": 0.9751225,
-          "median": 0.974779,
-          "min": 0.966299,
+          "max": 1.461458,
+          "mean": 1.3379667,
+          "median": 1.3106879999999999,
+          "min": 1.273792,
           "n": 30,
-          "rsd": 0.00446135262546346,
-          "sd": 0.004350365325523493
+          "rsd": 0.04570263030322167,
+          "sd": 0.0611485974481215
         },
         "size_breakdown": {
           "commitments": 512,
@@ -23,13 +23,13 @@
           "openings": 32
         },
         "verify_ms": {
-          "max": 0.649976,
-          "mean": 0.5472737999999999,
-          "median": 0.5446584999999999,
-          "min": 0.535285,
+          "max": 0.8424170000000001,
+          "mean": 0.7356542333333334,
+          "median": 0.7230000000000001,
+          "min": 0.6962090000000001,
           "n": 30,
-          "rsd": 0.03695165925423881,
-          "sd": 0.020222674976372437
+          "rsd": 0.05495133029070076,
+          "sd": 0.04042517875565225
         },
         "why": "ok"
       },
@@ -40,13 +40,13 @@
         },
         "n_inputs": 64,
         "prove_ms": {
-          "max": 3.7259070000000003,
-          "mean": 3.71093,
-          "median": 3.709684,
-          "min": 3.698551,
+          "max": 5.927499999999999,
+          "mean": 5.274565233333333,
+          "median": 5.1449165,
+          "min": 4.896,
           "n": 30,
-          "rsd": 0.0021869450816001373,
-          "sd": 0.008115600111662397
+          "rsd": 0.062383155722780595,
+          "sd": 0.3290440243209979
         },
         "size_breakdown": {
           "commitments": 2048,
@@ -55,13 +55,13 @@
           "openings": 32
         },
         "verify_ms": {
-          "max": 2.0039379999999998,
-          "mean": 1.9945478333333333,
-          "median": 1.994256,
-          "min": 1.98357,
+          "max": 3.3518329999999996,
+          "mean": 2.878393066666667,
+          "median": 2.8009375,
+          "min": 2.599334,
           "n": 30,
-          "rsd": 0.002256427549206176,
-          "sd": 0.004500552679342821
+          "rsd": 0.07988087256007097,
+          "sd": 0.22992854973619187
         },
         "why": "ok"
       },
@@ -72,13 +72,13 @@
         },
         "n_inputs": 167,
         "prove_ms": {
-          "max": 9.750599000000001,
-          "mean": 9.681458966666666,
-          "median": 9.6748355,
-          "min": 9.64218,
+          "max": 14.147125,
+          "mean": 13.238510999999999,
+          "median": 13.179333,
+          "min": 12.766458,
           "n": 30,
-          "rsd": 0.0029460110297916376,
-          "sd": 0.028521684900275148
+          "rsd": 0.02059847531166011,
+          "sd": 0.27269314199664074
         },
         "size_breakdown": {
           "commitments": 5344,
@@ -87,13 +87,13 @@
           "openings": 32
         },
         "verify_ms": {
-          "max": 5.2323509999999995,
-          "mean": 5.165541433333333,
-          "median": 5.1649725,
-          "min": 5.138514000000001,
+          "max": 7.179708,
+          "mean": 6.9253751,
+          "median": 6.9006875,
+          "min": 6.630042,
           "n": 30,
-          "rsd": 0.0037148098470638755,
-          "sd": 0.01918900418196311
+          "rsd": 0.01805307640777987,
+          "sd": 0.12502432583283615
         },
         "why": "ok"
       }
@@ -106,13 +106,13 @@
         },
         "n_inputs": 16,
         "prove_ms": {
-          "max": 15.625315,
-          "mean": 14.673911533333333,
-          "median": 14.629153,
-          "min": 14.587232,
+          "max": 23.582042,
+          "mean": 21.0913833,
+          "median": 20.965520499999997,
+          "min": 20.262875,
           "n": 30,
-          "rsd": 0.012899940292094049,
-          "sd": 0.18929258263147022
+          "rsd": 0.02908524498094894,
+          "sd": 0.6134480502675953
         },
         "size_breakdown": {
           "copaths": 2048,
@@ -124,13 +124,13 @@
           "witness_correction": 256
         },
         "verify_ms": {
-          "max": 15.892682000000002,
-          "mean": 12.449259766666668,
-          "median": 12.266847,
-          "min": 12.238733,
+          "max": 21.141333,
+          "mean": 18.482011066666665,
+          "median": 18.257354,
+          "min": 17.719542,
           "n": 30,
-          "rsd": 0.056070656813603646,
-          "sd": 0.6980381719601702
+          "rsd": 0.04154158577242492,
+          "sd": 0.7677720479728399
         },
         "why": "ok"
       },
@@ -141,13 +141,13 @@
         },
         "n_inputs": 64,
         "prove_ms": {
-          "max": 28.340425999999997,
-          "mean": 27.730978233333335,
-          "median": 27.8609285,
-          "min": 27.379973,
+          "max": 50.904334000000006,
+          "mean": 48.5189194,
+          "median": 48.4620625,
+          "min": 47.229583,
           "n": 30,
-          "rsd": 0.011580133644788862,
-          "sd": 0.32112843404273095
+          "rsd": 0.016646971472680145,
+          "sd": 0.8076930671370673
         },
         "size_breakdown": {
           "copaths": 2048,
@@ -159,13 +159,13 @@
           "witness_correction": 1024
         },
         "verify_ms": {
-          "max": 28.260885,
-          "mean": 26.3830733,
-          "median": 26.4363855,
-          "min": 25.953914,
+          "max": 47.813125,
+          "mean": 46.2471028,
+          "median": 46.146603999999996,
+          "min": 45.133292,
           "n": 30,
-          "rsd": 0.017977078849783355,
-          "sd": 0.47429058901371396
+          "rsd": 0.014295057705607319,
+          "sd": 0.6611050032431538
         },
         "why": "ok"
       },
@@ -176,13 +176,13 @@
         },
         "n_inputs": 167,
         "prove_ms": {
-          "max": 58.445817999999996,
-          "mean": 57.00583436666667,
-          "median": 56.911268500000006,
-          "min": 56.578049,
+          "max": 114.34504199999999,
+          "mean": 110.65321943333333,
+          "median": 110.4877915,
+          "min": 108.208417,
           "n": 30,
-          "rsd": 0.0068076729900923925,
-          "sd": 0.38807707889563736
+          "rsd": 0.01218655471938353,
+          "sd": 1.3484815135002697
         },
         "size_breakdown": {
           "copaths": 2048,
@@ -194,21 +194,21 @@
           "witness_correction": 2672
         },
         "verify_ms": {
-          "max": 60.427862999999995,
-          "mean": 57.7765997,
-          "median": 57.645885500000006,
-          "min": 57.250237000000006,
+          "max": 115.672084,
+          "mean": 110.20505556666667,
+          "median": 109.930479,
+          "min": 106.732667,
           "n": 30,
-          "rsd": 0.01008401491600417,
-          "sd": 0.5826200931708021
+          "rsd": 0.018210411393180692,
+          "sd": 2.006879399477338
         },
         "why": "ok"
       }
     ]
   },
-  "caveat": "Both arms are Rust. Pedersen is curve25519-dalek; VOLEitH is the sha2 and sha3 crates over this repository's own field arithmetic. The comparison is no longer C against CPython, so the ratio is no longer an upper bound in the earlier sense --- but curve25519-dalek is audited and heavily tuned and the field arithmetic here is not, so an unmeasured part of the ratio is still implementation rather than transform. Bytes and hash counts do not have this problem.",
+  "caveat": "Both arms are Rust. Pedersen uses curve25519-dalek; VOLEitH uses the sha2 and sha3 crates over this repository's own field arithmetic. The curve backend is audited and heavily tuned while the field arithmetic is not, so part of the timing ratio remains an implementation comparison. Bytes and hash counts do not have this problem.",
   "depth": 8,
-  "host": "host-a",
+  "host": "host-c",
   "linear_code": {
     "code_swap_only": {
       "bytes": 10816,
@@ -236,18 +236,18 @@
   "ratios": {
     "16": {
       "bytes": 11.45,
-      "prove": 15.01,
-      "verify": 22.52
+      "prove": 16.0,
+      "verify": 25.25
     },
     "167": {
       "bytes": 8.39,
-      "prove": 5.88,
-      "verify": 11.16
+      "prove": 8.38,
+      "verify": 15.93
     },
     "64": {
       "bytes": 8.98,
-      "prove": 7.51,
-      "verify": 13.26
+      "prove": 9.42,
+      "verify": 16.48
     }
   },
   "repeats": 30,

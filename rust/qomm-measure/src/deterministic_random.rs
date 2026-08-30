@@ -1,17 +1,15 @@
-//! CPython's `random.Random`, reimplemented so a ported simulation can be
-//! checked against the original rather than merely resemble it.
+//! Deterministic MT19937 stream used by every reproducible simulation.
 //!
 //! A simulator whose results are compared against a published set has to
 //! reproduce the stream that produced them. Any other generator gives a
-//! statistically equivalent run and no way to tell a faithful port from a subtly
-//! different one --- and a subtly different market is exactly the failure a port
-//! is most likely to have. Mersenne Twister and the derived distributions are
-//! small enough to write out, so they are written out.
+//! statistically equivalent run but changes the paired experiment. Mersenne
+//! Twister and the derived distributions are therefore implemented explicitly
+//! and pinned by contract vectors.
 //!
 //! What is implemented is the subset the simulation uses: `random`, `getrandbits`,
 //! `randrange`, `randint`, `choice`, `choices`, `sample`, `gauss` and
-//! `paretovariate`. Each follows CPython's algorithm exactly, including the
-//! cached second normal that makes `gauss` stateful.
+//! `paretovariate`, including the cached second normal that makes `gauss`
+//! stateful.
 
 const N: usize = 624;
 const M: usize = 397;
@@ -19,21 +17,21 @@ const MATRIX_A: u32 = 0x9908_b0df;
 const UPPER_MASK: u32 = 0x8000_0000;
 const LOWER_MASK: u32 = 0x7fff_ffff;
 
-pub struct PyRandom {
+pub struct DeterministicRng {
     state: [u32; N],
     index: usize,
     /// `gauss` produces two normals at a time and keeps the second.
     gauss_next: Option<f64>,
 }
 
-impl PyRandom {
+impl DeterministicRng {
     pub fn new(seed: u64) -> Self {
-        let mut rng = PyRandom {
+        let mut rng = DeterministicRng {
             state: [0; N],
             index: N + 1,
             gauss_next: None,
         };
-        // CPython seeds from the absolute value of the integer, as 32-bit words.
+        // Versioned integer seeding uses low-to-high 32-bit words.
         let mut key: Vec<u32> = Vec::new();
         let mut value = seed;
         if value == 0 {
@@ -116,8 +114,7 @@ impl PyRandom {
         y
     }
 
-    /// 53 bits of randomness in [0, 1), from two draws --- the same construction
-    /// CPython uses, so the doubles match to the last bit.
+    /// 53 bits of randomness in [0, 1), assembled from two draws.
     pub fn random(&mut self) -> f64 {
         let a = self.genrand_u32() >> 5;
         let b = self.genrand_u32() >> 6;
@@ -131,7 +128,7 @@ impl PyRandom {
         if k <= 32 {
             return (self.genrand_u32() >> (32 - k)) as u64;
         }
-        // CPython fills words low-to-high, trimming the last one.
+        // Fill words low-to-high and trim the last one.
         let mut out = 0u64;
         let mut shift = 0u32;
         let mut left = k;
@@ -149,8 +146,8 @@ impl PyRandom {
         out
     }
 
-    /// Rejection sampling on the bit length, as CPython does: a modulo would be
-    /// biased and would also desynchronise the stream.
+    /// Rejection sampling on the bit length; modulo reduction would be biased
+    /// and would also desynchronise the stream.
     fn below(&mut self, n: u64) -> u64 {
         if n == 0 {
             return 0;
@@ -176,8 +173,7 @@ impl PyRandom {
         &items[self.below(items.len() as u64) as usize]
     }
 
-    /// Weighted choice with replacement, matching CPython's cumulative-weight
-    /// bisection.
+    /// Weighted choice with replacement using cumulative-weight bisection.
     pub fn choices(&mut self, weights: &[f64]) -> usize {
         let mut cumulative = Vec::with_capacity(weights.len());
         let mut total = 0.0;
@@ -200,14 +196,14 @@ impl PyRandom {
         lo
     }
 
-    /// `random.sample(range(n), k)` for the selection-set branch CPython takes
-    /// when k is small relative to n.
+    /// Sample without replacement, using a selection set when `k` is small
+    /// relative to `n`.
     pub fn sample(&mut self, n: usize, k: usize) -> Vec<usize> {
         use std::collections::HashSet;
         let mut selected: HashSet<u64> = HashSet::new();
         let mut out = Vec::with_capacity(k);
-        // CPython switches to a pool copy when k is a large fraction of n; both
-        // branches are implemented because the seed stream differs between them.
+        // Switch to a pool copy when k is a large fraction of n; both branches
+        // are fixed because they consume the stream differently.
         let setsize = if k <= 5 {
             21
         } else {
@@ -258,9 +254,9 @@ impl PyRandom {
     }
 }
 
-impl PyRandom {
-    /// `random.shuffle`: Fisher--Yates downward, using the same `_randbelow`
-    /// the rest of the module uses, so a shuffled order matches CPython's.
+impl DeterministicRng {
+    /// Fisher--Yates downward using the same unbiased bounded draw as the rest
+    /// of this module.
     pub fn shuffle<T>(&mut self, items: &mut [T]) {
         for i in (1..items.len()).rev() {
             let j = self.below((i + 1) as u64) as usize;

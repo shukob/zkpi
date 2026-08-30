@@ -1,8 +1,6 @@
-//! Rust port of `scripts/run_state_audit.py`.
-
 use curve25519_dalek::ristretto::{RistrettoPoint, RistrettoPoint as Point};
 use curve25519_dalek::scalar::Scalar;
-use qomm_harness::{parse_value, python_version, timing_summary, write_pretty_json, HarnessResult};
+use qomm_harness::{parse_value, rustc_version, timing_summary, write_pretty_json, HarnessResult};
 use qomm_proofs::state_audit::{ChainError, InventoryLimit, StateAuditor, StateStep};
 use rand_core::OsRng;
 use serde_json::{json, Value};
@@ -36,7 +34,7 @@ fn run_main() -> HarnessResult<()> {
     if options.limit > options.ceiling {
         return Err("--limit must not exceed --ceiling".into());
     }
-    if options.lengths.iter().any(|&length| length == 0) {
+    if options.lengths.contains(&0) {
         return Err("--lengths values must be positive".into());
     }
     let auditor = StateAuditor::new();
@@ -55,7 +53,7 @@ fn run_main() -> HarnessResult<()> {
             render(&row["prove_per_step"], 1),
             row["verify_ms_per_step"].as_f64().unwrap_or(0.0),
             row["step_bytes"]["exact"].as_u64().unwrap_or(0),
-            qomm_harness::py_display(&row["accepted"]),
+            qomm_harness::value_display(&row["accepted"]),
         );
         chains.push(row);
     }
@@ -64,7 +62,7 @@ fn run_main() -> HarnessResult<()> {
         println!(
             "  {:34} accepted={}",
             row["attack"].as_str().unwrap_or_default(),
-            qomm_harness::py_display(&row["accepted"]),
+            qomm_harness::value_display(&row["accepted"]),
         );
     }
     if rejections
@@ -75,7 +73,7 @@ fn run_main() -> HarnessResult<()> {
     }
     let payload = json!({
         "host": qomm_measure::hosts::this_host(),
-        "python": python_version(),
+        "rustc": rustc_version(),
         "group": "ed25519",
         "ceiling": options.ceiling,
         "limit": options.limit,
@@ -149,9 +147,8 @@ fn one_chain(
         "verify_ms_per_step": verify_ms / length as f64,
         "accepted": accepted,
         "reason": reason,
-        // Keep the Python wire-format measurement stable at the artifact
         // boundary while the proof operations themselves use qomm-proofs.
-        "step_bytes": {"exact": python_step_bytes(ceiling_value)},
+        "step_bytes": {"exact": canonical_step_bytes(ceiling_value)},
     });
     Ok((
         row,
@@ -246,7 +243,7 @@ fn verdict(result: Result<(), ChainError>) -> (bool, String) {
     }
 }
 
-fn python_step_bytes(ceiling: u64) -> usize {
+fn canonical_step_bytes(ceiling: u64) -> usize {
     let bits = (2 * ceiling).ilog2() as usize + 1;
     64 + 64 + 2 * bits * (32 * 2 + 32 * 3) + 32
 }

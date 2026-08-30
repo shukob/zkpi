@@ -1,6 +1,5 @@
 //! Prime-field VOLE-in-the-Head used by the `run_voleith` measurement port.
 //!
-//! This follows `zk/voleith.py`.  Packed Python big integers are replaced by
 //! element-wise Mersenne-field arithmetic; the transcript and proof are the
 //! same, while the implementation-dependent timing is intentionally allowed to
 //! differ by the harness acceptance rule.
@@ -149,6 +148,13 @@ pub struct Prover {
     proved: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VoleCommitment {
+    pub root: [u8; COMMIT_BYTES],
+    pub witness_correction: Vec<u128>,
+    pub vole_corrections: Vec<Vec<u128>>,
+}
+
 impl Prover {
     pub fn new<R: RngCore + CryptoRng>(
         depth: usize,
@@ -171,10 +177,7 @@ impl Prover {
         })
     }
 
-    pub fn commit(
-        &mut self,
-        values: &[u128],
-    ) -> Result<([u8; COMMIT_BYTES], Vec<u128>, Vec<Vec<u128>>), String> {
+    pub fn commit(&mut self, values: &[u128]) -> Result<VoleCommitment, String> {
         if self.committed.is_some() {
             return Err("this commitment is already made; build another Prover".into());
         }
@@ -234,7 +237,11 @@ impl Prover {
             witness_correction: witness_correction.clone(),
             vole_corrections: vole_corrections.clone(),
         });
-        Ok((root, witness_correction, vole_corrections))
+        Ok(VoleCommitment {
+            root,
+            witness_correction,
+            vole_corrections,
+        })
     }
 
     pub fn prove(&mut self, coeffs: &[u64], context: &[u8]) -> Result<LinearProof, String> {
@@ -294,8 +301,14 @@ pub fn prove<R: RngCore + CryptoRng>(
     rng: &mut R,
 ) -> Result<LinearProof, String> {
     let mut prover = Prover::new(depth, repeats, rng)?;
-    let (root, correction, _) = prover.commit(values)?;
-    let coeffs = coefficients(&root, &correction, context, 40, values.len());
+    let commitment = prover.commit(values)?;
+    let coeffs = coefficients(
+        &commitment.root,
+        &commitment.witness_correction,
+        context,
+        40,
+        values.len(),
+    );
     prover.prove(&coeffs, context)
 }
 
@@ -747,8 +760,14 @@ mod tests {
         let mut rng =
             StdRng::seed_from_u64(0x564f_4c45_6974_6800 ^ count as u64 ^ ((depth as u64) << 8));
         let mut prover = Prover::new(depth, repeats, &mut rng).unwrap();
-        let (root, correction, _) = prover.commit(&vals).unwrap();
-        let coeffs = coefficients(&root, &correction, context, 40, vals.len());
+        let commitment = prover.commit(&vals).unwrap();
+        let coeffs = coefficients(
+            &commitment.root,
+            &commitment.witness_correction,
+            context,
+            40,
+            vals.len(),
+        );
         let proof = prover.prove(&coeffs, context).unwrap();
         (vals, coeffs, proof)
     }
@@ -1063,8 +1082,14 @@ mod tests {
     fn a_second_proof_is_refused() {
         let mut rng = StdRng::seed_from_u64(17);
         let mut prover = Prover::new(4, 3, &mut rng).unwrap();
-        let (root, correction, _) = prover.commit(&values(5)).unwrap();
-        let coeffs = coefficients(&root, &correction, CONTEXT, 40, 5);
+        let commitment = prover.commit(&values(5)).unwrap();
+        let coeffs = coefficients(
+            &commitment.root,
+            &commitment.witness_correction,
+            CONTEXT,
+            40,
+            5,
+        );
         prover.prove(&coeffs, CONTEXT).unwrap();
         let error = prover.prove(&coeffs, b"another statement").unwrap_err();
         assert!(error.contains("open once"));
