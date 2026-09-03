@@ -1,0 +1,314 @@
+{
+  "arms": {
+    "pedersen": [
+      {
+        "accepted": true,
+        "bytes": {
+          "exact": 608
+        },
+        "n_inputs": 16,
+        "prove_ms": {
+          "max": 1.461458,
+          "mean": 1.3379667,
+          "median": 1.3106879999999999,
+          "min": 1.273792,
+          "n": 30,
+          "rsd": 0.04570263030322167,
+          "sd": 0.0611485974481215
+        },
+        "size_breakdown": {
+          "commitments": 512,
+          "mask_commitments": 32,
+          "opening_blindings": 32,
+          "openings": 32
+        },
+        "verify_ms": {
+          "max": 0.8424170000000001,
+          "mean": 0.7356542333333334,
+          "median": 0.7230000000000001,
+          "min": 0.6962090000000001,
+          "n": 30,
+          "rsd": 0.05495133029070076,
+          "sd": 0.04042517875565225
+        },
+        "why": "ok"
+      },
+      {
+        "accepted": true,
+        "bytes": {
+          "exact": 2144
+        },
+        "n_inputs": 64,
+        "prove_ms": {
+          "max": 5.927499999999999,
+          "mean": 5.274565233333333,
+          "median": 5.1449165,
+          "min": 4.896,
+          "n": 30,
+          "rsd": 0.062383155722780595,
+          "sd": 0.3290440243209979
+        },
+        "size_breakdown": {
+          "commitments": 2048,
+          "mask_commitments": 32,
+          "opening_blindings": 32,
+          "openings": 32
+        },
+        "verify_ms": {
+          "max": 3.3518329999999996,
+          "mean": 2.878393066666667,
+          "median": 2.8009375,
+          "min": 2.599334,
+          "n": 30,
+          "rsd": 0.07988087256007097,
+          "sd": 0.22992854973619187
+        },
+        "why": "ok"
+      },
+      {
+        "accepted": true,
+        "bytes": {
+          "exact": 5440
+        },
+        "n_inputs": 167,
+        "prove_ms": {
+          "max": 14.147125,
+          "mean": 13.238510999999999,
+          "median": 13.179333,
+          "min": 12.766458,
+          "n": 30,
+          "rsd": 0.02059847531166011,
+          "sd": 0.27269314199664074
+        },
+        "size_breakdown": {
+          "commitments": 5344,
+          "mask_commitments": 32,
+          "opening_blindings": 32,
+          "openings": 32
+        },
+        "verify_ms": {
+          "max": 7.179708,
+          "mean": 6.9253751,
+          "median": 6.9006875,
+          "min": 6.630042,
+          "n": 30,
+          "rsd": 0.01805307640777987,
+          "sd": 0.12502432583283615
+        },
+        "why": "ok"
+      }
+    ],
+    "voleith": [
+      {
+        "accepted": true,
+        "bytes": {
+          "exact": 6960
+        },
+        "n_inputs": 16,
+        "prove_ms": {
+          "max": 23.582042,
+          "mean": 21.0913833,
+          "median": 20.965520499999997,
+          "min": 20.262875,
+          "n": 30,
+          "rsd": 0.02908524498094894,
+          "sd": 0.6134480502675953
+        },
+        "size_breakdown": {
+          "copaths": 2048,
+          "opening": 16,
+          "punctured": 512,
+          "root": 32,
+          "tags": 256,
+          "vole_corrections": 3840,
+          "witness_correction": 256
+        },
+        "verify_ms": {
+          "max": 21.141333,
+          "mean": 18.482011066666665,
+          "median": 18.257354,
+          "min": 17.719542,
+          "n": 30,
+          "rsd": 0.04154158577242492,
+          "sd": 0.7677720479728399
+        },
+        "why": "ok"
+      },
+      {
+        "accepted": true,
+        "bytes": {
+          "exact": 19248
+        },
+        "n_inputs": 64,
+        "prove_ms": {
+          "max": 50.904334000000006,
+          "mean": 48.5189194,
+          "median": 48.4620625,
+          "min": 47.229583,
+          "n": 30,
+          "rsd": 0.016646971472680145,
+          "sd": 0.8076930671370673
+        },
+        "size_breakdown": {
+          "copaths": 2048,
+          "opening": 16,
+          "punctured": 512,
+          "root": 32,
+          "tags": 256,
+          "vole_corrections": 15360,
+          "witness_correction": 1024
+        },
+        "verify_ms": {
+          "max": 47.813125,
+          "mean": 46.2471028,
+          "median": 46.146603999999996,
+          "min": 45.133292,
+          "n": 30,
+          "rsd": 0.014295057705607319,
+          "sd": 0.6611050032431538
+        },
+        "why": "ok"
+      },
+      {
+        "accepted": true,
+        "bytes": {
+          "exact": 45616
+        },
+        "n_inputs": 167,
+        "prove_ms": {
+          "max": 114.34504199999999,
+          "mean": 110.65321943333333,
+          "median": 110.4877915,
+          "min": 108.208417,
+          "n": 30,
+          "rsd": 0.01218655471938353,
+          "sd": 1.3484815135002697
+        },
+        "size_breakdown": {
+          "copaths": 2048,
+          "opening": 16,
+          "punctured": 512,
+          "root": 32,
+          "tags": 256,
+          "vole_corrections": 40080,
+          "witness_correction": 2672
+        },
+        "verify_ms": {
+          "max": 115.672084,
+          "mean": 110.20505556666667,
+          "median": 109.930479,
+          "min": 106.732667,
+          "n": 30,
+          "rsd": 0.018210411393180692,
+          "sd": 2.006879399477338
+        },
+        "why": "ok"
+      }
+    ]
+  },
+  "caveat": "Both arms are Rust. Pedersen uses curve25519-dalek; VOLEitH uses the sha2 and sha3 crates over this repository's own field arithmetic. The curve backend is audited and heavily tuned while the field arithmetic is not, so part of the timing ratio remains an implementation comparison. Bytes and hash counts do not have this problem.",
+  "depth": 8,
+  "host": "host-c",
+  "linear_code": {
+    "code_swap_only": {
+      "bytes": 10816,
+      "caveat": "unreachable for a within-block inner product: soundness falls to |S_Delta|^-1 = 2^-8. Kept because it is the figure this file used to report and the correction is the finding",
+      "d_C": 16,
+      "hashes": 15872,
+      "k_C": 16,
+      "n_C": 31,
+      "rows": 11
+    },
+    "depth": 8,
+    "n_values": 167,
+    "note": "arithmetic only; Pi_2D-LC is not implemented",
+    "protocol_complete": {
+      "bytes": 18896,
+      "d_C": 16,
+      "hashes": 24064,
+      "k_C": 32,
+      "n_C": 47,
+      "protocol": "Pi_2D-LC, eprint 2023/996 figure 6",
+      "rows": 6
+    }
+  },
+  "modulus_bits": 127,
+  "ratios": {
+    "16": {
+      "bytes": 11.45,
+      "prove": 16.0,
+      "verify": 25.25
+    },
+    "167": {
+      "bytes": 8.39,
+      "prove": 8.38,
+      "verify": 15.93
+    },
+    "64": {
+      "bytes": 8.98,
+      "prove": 9.42,
+      "verify": 16.48
+    }
+  },
+  "repeats": 30,
+  "soundness_bits": 128,
+  "sweep": [
+    {
+      "bytes": 89136,
+      "depth": 4,
+      "hashes": 1024,
+      "leaves_per_tree": 16,
+      "repeats": 32,
+      "soundness_bits": 128
+    },
+    {
+      "bytes": 62000,
+      "depth": 6,
+      "hashes": 2816,
+      "leaves_per_tree": 64,
+      "repeats": 22,
+      "soundness_bits": 132
+    },
+    {
+      "bytes": 45616,
+      "depth": 8,
+      "hashes": 8192,
+      "leaves_per_tree": 256,
+      "repeats": 16,
+      "soundness_bits": 128
+    },
+    {
+      "bytes": 37488,
+      "depth": 10,
+      "hashes": 26624,
+      "leaves_per_tree": 1024,
+      "repeats": 13,
+      "soundness_bits": 130
+    },
+    {
+      "bytes": 32080,
+      "depth": 12,
+      "hashes": 90112,
+      "leaves_per_tree": 4096,
+      "repeats": 11,
+      "soundness_bits": 132
+    },
+    {
+      "bytes": 29488,
+      "depth": 14,
+      "hashes": 327680,
+      "leaves_per_tree": 16384,
+      "repeats": 10,
+      "soundness_bits": 140
+    },
+    {
+      "bytes": 23856,
+      "depth": 16,
+      "hashes": 1048576,
+      "leaves_per_tree": 65536,
+      "repeats": 8,
+      "soundness_bits": 128
+    }
+  ],
+  "tree_repeats": 16
+}

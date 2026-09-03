@@ -1,0 +1,126 @@
+{
+  "calibration": {
+    "scalar_mult_us": {
+      "max": 52.208,
+      "mean": 36.971225,
+      "median": 35.5,
+      "min": 34.916000000000004,
+      "n": 200,
+      "rsd": 0.07840107922441886,
+      "sd": 2.8985839402488147
+    }
+  },
+  "ceiling": 8192,
+  "chains": [
+    {
+      "accepted": true,
+      "limit_commit_ms": 5.224958,
+      "prove_per_step": {
+        "max": 10.826333,
+        "mean": 10.826333,
+        "median": 10.826333,
+        "min": 10.826333,
+        "n": 1,
+        "rsd": null,
+        "sd": null
+      },
+      "reason": "ok",
+      "step_bytes": {
+        "exact": 4960
+      },
+      "steps": 1,
+      "verify_ms_per_step": 2.454,
+      "verify_total_ms": 2.454
+    },
+    {
+      "accepted": true,
+      "limit_commit_ms": 5.2885,
+      "prove_per_step": {
+        "max": 10.833499999999999,
+        "mean": 10.750125,
+        "median": 10.738583,
+        "min": 10.671625,
+        "n": 5,
+        "rsd": 0.00593424674198752,
+        "sd": 0.06379389425720859
+      },
+      "reason": "ok",
+      "step_bytes": {
+        "exact": 4960
+      },
+      "steps": 5,
+      "verify_ms_per_step": 1.8346250000000002,
+      "verify_total_ms": 9.173125
+    },
+    {
+      "accepted": true,
+      "limit_commit_ms": 4.899917,
+      "prove_per_step": {
+        "max": 11.526584,
+        "mean": 10.5956877,
+        "median": 10.553021,
+        "min": 10.310416,
+        "n": 20,
+        "rsd": 0.023986207337513245,
+        "sd": 0.2541503620557388
+      },
+      "reason": "ok",
+      "step_bytes": {
+        "exact": 4960
+      },
+      "steps": 20,
+      "verify_ms_per_step": 1.71775625,
+      "verify_total_ms": 34.355125
+    },
+    {
+      "accepted": true,
+      "limit_commit_ms": 4.839709,
+      "prove_per_step": {
+        "max": 11.951625,
+        "mean": 11.4239425,
+        "median": 11.540479,
+        "min": 10.427166,
+        "n": 50,
+        "rsd": 0.03396402998293775,
+        "sd": 0.38800312559335687
+      },
+      "reason": "ok",
+      "step_bytes": {
+        "exact": 4960
+      },
+      "steps": 50,
+      "verify_ms_per_step": 1.78528082,
+      "verify_total_ms": 89.264041
+    }
+  ],
+  "group": "ed25519",
+  "host": "host-c",
+  "limit": 4000,
+  "rejections": [
+    {
+      "accepted": false,
+      "attack": "replayed or skipped state",
+      "ms": 2.662666,
+      "reason": "step 2 (index 1) does not follow the state before it: a replayed or forked inventory"
+    },
+    {
+      "accepted": false,
+      "attack": "forked state",
+      "ms": 2.477291,
+      "reason": "step 1 (index 1) does not follow the state before it: a replayed or forked inventory"
+    },
+    {
+      "accepted": false,
+      "attack": "limit swapped for a looser one",
+      "ms": 1.130292,
+      "reason": "step 0 (index 0) failed its proofs"
+    },
+    {
+      "accepted": false,
+      "attack": "breach the committed limit",
+      "ms": 0.0,
+      "reason": "inventory 7999 breaks the committed limit 4000; the maker cannot prove this step and must decline the fill"
+    }
+  ],
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+}

@@ -1,0 +1,38 @@
+{
+  "artifacts": {
+    "quote_proof.json": {
+      "bytes": 4916,
+      "host": "host-a",
+      "sha256": "d2343739fbc36218fa3009fdeb20cf76dd07edacf60f9fa857334335ba6438f6"
+    },
+    "state_audit.json": {
+      "bytes": 3056,
+      "host": "host-c",
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "sha256": "8fdb07dedad991dc87e70929c61ccbfca3be935d1d8e90be83d1f9de66ff96a0"
+    },
+    "voleith.json": {
+      "bytes": 7679,
+      "host": "host-c",
+      "sha256": "f0ed398328535fe0a5978b65faff8e0b460a354bf1409cf107ad4739c77d991c"
+    },
+    "zk_bench.json": {
+      "bytes": 14236,
+      "host": "host-c",
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "sha256": "d01c1c883debdbc092cc1d1e8beba5cfd7b06628d2190f54916a8038c12cd90c"
+    },
+    "zk_compare.json": {
+      "bytes": 8903,
+      "host": "host-a",
+      "sha256": "2cf55e5d63d1ae78d62f207aa39c085c17a46bde378552a85be8e7aa8682c558"
+    },
+    "zkpi_wire.json": {
+      "bytes": 1126,
+      "host": "host-a",
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "sha256": "568b4acab5ae70e85d380c5b574aebaeeabdc08d74fecfb7ec62073d874c8d4a"
+    }
+  },
+  "commit": null
+}

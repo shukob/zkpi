@@ -1,0 +1,207 @@
+{
+  "calibration": {
+    "range_proof_40bit_ms": {
+      "max": 14.538627,
+      "mean": 14.1619512,
+      "median": 14.121072,
+      "min": 14.089981,
+      "n": 15,
+      "rsd": 0.008275356384448882,
+      "sd": 0.11719519327917352
+    },
+    "scalar_mult_us": {
+      "max": 31.852,
+      "mean": 25.84002,
+      "median": 25.572,
+      "min": 25.483999999999998,
+      "n": 50,
+      "rsd": 0.041674472592976054,
+      "sd": 1.076869205291953
+    }
+  },
+  "forgery_controls": [
+    {
+      "control": "winner swapped to a non-minimal maker",
+      "reason": "the published winner value is not what the commitment opens to",
+      "rejected": true
+    },
+    {
+      "control": "expired maker appears and cannot win",
+      "reason": "gated off; winner is maker 5",
+      "rejected": true
+    },
+    {
+      "control": "request nobody can fill answers `no quote`",
+      "reason": "every maker gated to the sentinel",
+      "rejected": true
+    },
+    {
+      "control": "the winning maker switched off",
+      "reason": "maker 5: eligibility is not the conjunction of its three tests",
+      "rejected": true
+    },
+    {
+      "control": "minimality proofs swapped between makers",
+      "reason": "maker 0: not shown to be at least the winner",
+      "rejected": true
+    },
+    {
+      "control": "minimality for a false winner",
+      "reason": "value -1 outside [0, 2^25)",
+      "rejected": true
+    }
+  ],
+  "host": "host-a",
+  "joint": [
+    {
+      "assemble": {
+        "max": 4.970075,
+        "mean": 4.78947765,
+        "median": 4.770293499999999,
+        "min": 4.757277,
+        "n": 20,
+        "rsd": 0.012399634128703995,
+        "sd": 0.05938777052760501
+      },
+      "assemble_without_attribution": {
+        "max": 4.142942000000001,
+        "mean": 4.085111899999999,
+        "median": 4.083937000000001,
+        "min": 4.070938,
+        "n": 20,
+        "rsd": 0.003690961705908905,
+        "sd": 0.015077991587252766
+      },
+      "attribution_factor": 1.172422633025059,
+      "no_node_holds_witness": true,
+      "quorum": [
+        1,
+        2,
+        3
+      ],
+      "size": 3,
+      "verified_by_ordinary_verifier": true
+    },
+    {
+      "assemble": {
+        "max": 20.436270999999998,
+        "mean": 20.22859815,
+        "median": 20.208838,
+        "min": 20.160017999999997,
+        "n": 20,
+        "rsd": 0.003587924504224565,
+        "sd": 0.0725786829884967
+      },
+      "assemble_without_attribution": {
+        "max": 18.901442,
+        "mean": 18.5619799,
+        "median": 18.536127,
+        "min": 18.513215,
+        "n": 20,
+        "rsd": 0.004676018300959218,
+        "sd": 0.08679615771443716
+      },
+      "attribution_factor": 1.0897866638676836,
+      "no_node_holds_witness": true,
+      "quorum": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "size": 7,
+      "verified_by_ordinary_verifier": true
+    }
+  ],
+  "nodes": 7,
+  "scaling": [
+    {
+      "makers": 4,
+      "matches_cleartext": true,
+      "message": "ok",
+      "prove": {
+        "max": 62.452538000000004,
+        "mean": 62.33982486666667,
+        "median": 62.33095,
+        "min": 62.260243,
+        "n": 15,
+        "rsd": 0.0008314448340573366,
+        "sd": 0.05183212534142909
+      },
+      "range_bits": {
+        "exact": 24
+      },
+      "verified": true,
+      "verify": {
+        "max": 19.42904,
+        "mean": 18.6998228,
+        "median": 18.618909,
+        "min": 18.571082,
+        "n": 15,
+        "rsd": 0.011918409602014764,
+        "sd": 0.2228721476154946
+      },
+      "winner": 2
+    },
+    {
+      "makers": 8,
+      "matches_cleartext": true,
+      "message": "ok",
+      "prove": {
+        "max": 124.558203,
+        "mean": 123.77805373333334,
+        "median": 123.607326,
+        "min": 123.416544,
+        "n": 15,
+        "rsd": 0.002742276530843654,
+        "sd": 0.3394336517864247
+      },
+      "range_bits": {
+        "exact": 25
+      },
+      "verified": true,
+      "verify": {
+        "max": 37.046173,
+        "mean": 36.39453266666667,
+        "median": 36.577497,
+        "min": 35.801792,
+        "n": 15,
+        "rsd": 0.013299717166478917,
+        "sd": 0.4840369908728444
+      },
+      "winner": 5
+    },
+    {
+      "makers": 16,
+      "matches_cleartext": true,
+      "message": "ok",
+      "prove": {
+        "max": 252.29493600000004,
+        "mean": 246.50039139999998,
+        "median": 246.005544,
+        "min": 245.445538,
+        "n": 15,
+        "rsd": 0.0071143283095437305,
+        "sd": 1.7536847128506299
+      },
+      "range_bits": {
+        "exact": 26
+      },
+      "verified": true,
+      "verify": {
+        "max": 72.969123,
+        "mean": 71.15720406666667,
+        "median": 70.952986,
+        "min": 70.857464,
+        "n": 15,
+        "rsd": 0.007463596674734021,
+        "sd": 0.5310886716553435
+      },
+      "winner": 5
+    }
+  ],
+  "threshold": 2
+}
