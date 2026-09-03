@@ -516,7 +516,7 @@ dependencies = [
 [[package]]
 name = "qomm-dsl"
 version = "0.1.0"
-source = "git+https://github.com/shukob/qomm#4525ebeb0fe82ae0121883aabd3727aa95a2c861"
+source = "git+https://github.com/shukob/qomm#972396e61c46b602059a62c25be2ee4779889221"
 dependencies = [
  "sha2",
 ]
@@ -587,6 +587,8 @@ dependencies = [
  "qomm-zk",
  "rand",
  "rand_core",
+ "serde",
+ "serde_json",
  "sha2",
 ]
 
