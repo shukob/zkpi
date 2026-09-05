@@ -1,0 +1,12 @@
+schema_version = 1
+project = "zkPI"
+repository = "https://github.com/shukob/zkpi"
+implementation_language = "Rust"
+application = "Generic verifiable financial execution instructions"
+
+[boundaries]
+application_ownership = "Application-specific receivable types and proofs belong to Aethel; keep the foundation generic."
+
+[verification]
+allowed_remote_hosts = ["softbank-l40s", "omenx_ubuntu_zerotier"]
+local_builds_forbidden = true
